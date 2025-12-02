@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: daiso-batch
+
+  datasource:
+    url: jdbc:mysql://s4.java21.net:13306/project_be12_team3
+    username: project_be12_team3
+    password: Vu52gc0i(mNxDJyI
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none  # 배치는 테이블 생성 안 함
+    show-sql: true
+
+  batch:
+    jdbc:
+      initialize-schema: always  # 배치 메타 테이블 자동 생성
+    job:
+      enabled: false  # 자동 실행 방지 (수동으로 실행)
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+#      defaultZone: http://team3-eureka:8761/eureka/
+      defaultZone: http://localhost:8761/eureka/
+
+user:
+  service:
+    url: http://localhost:8083
+
+
+server:
+  port: 8095
+
+
