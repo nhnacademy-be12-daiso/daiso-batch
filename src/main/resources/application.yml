@@ -3,9 +3,9 @@ spring:
     name: daiso-batch
 
   datasource:
-    url: jdbc:mysql://s4.java21.net:13306/project_be12_team3
-    username: project_be12_team3
-    password: Vu52gc0i(mNxDJyI
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -26,15 +26,6 @@ eureka:
     register-with-eureka: true
     fetch-registry: true
     service-url:
-#      defaultZone: http://team3-eureka:8761/eureka/
-      defaultZone: http://localhost:8761/eureka/
-
-user:
-  service:
-    url: http://localhost:8083
-
-
-server:
-  port: 8095
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
 
 
