@@ -5,7 +5,9 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.7</version> <relativePath/> </parent>
+        <version>3.5.7</version>
+        <relativePath/>
+    </parent>
     <groupId>com.nhnacademy</groupId>
     <artifactId>daiso-batch</artifactId>
     <version>0.0.1-SNAPSHOT</version>
@@ -90,6 +92,10 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
     </dependencies>
 
