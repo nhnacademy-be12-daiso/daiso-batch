@@ -1,5 +1,6 @@
 package com.nhnacademy.daisobatch.scheduler;
 
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
@@ -20,6 +21,11 @@ public class BirthdayBatchScheduler {
 
     // 매월 1월 0시 0분 0초에 실행
     @Scheduled(cron = "0 0 0 1 * *")
+    @SchedulerLock(
+            name = "birthdayJob", // 이 이름으로 DB에서 구분 (유니크해야 함)
+            lockAtLeastFor = "30s",  // 작업이 0.1초 만에 끝나도 최소 30초는 락을 유지 (다른 서버가 혹시라도 실행하는 것 방지)
+            lockAtMostFor = "10m"    // 10분이 지나도 안 끝나면 락 강제 해제 (데드락 방지)
+    )
     public void runBirthdayJob(){
         try {
             // 같은 Job을 여러 번 실행하려면 파라미터(시간 등)가 달라야 함

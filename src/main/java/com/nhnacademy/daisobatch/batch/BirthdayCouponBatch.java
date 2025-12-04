@@ -83,6 +83,7 @@ public class BirthdayCouponBatch {
     }
     // 4. Processor: DTO -> Entity 변환
     @Bean
+    @StepScope
     public ItemProcessor<BirthdayUserDto, UserCoupon> birthdayUserProcessor(){
         if(birthdayPolicy == null){
             birthdayPolicy = couponPolicyRepository.findById(4L)
