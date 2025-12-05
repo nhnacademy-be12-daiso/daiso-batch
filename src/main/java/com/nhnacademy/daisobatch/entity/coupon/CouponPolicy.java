@@ -1,14 +1,36 @@
-package com.nhnacademy.daisobatch.entity;
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
+package com.nhnacademy.daisobatch.entity.coupon;
 
 import com.nhnacademy.daisobatch.dto.CouponPolicyUpdateRequest;
 import com.nhnacademy.daisobatch.type.CouponPolicyStatus;
 import com.nhnacademy.daisobatch.type.CouponType;
 import com.nhnacademy.daisobatch.type.DiscountWay;
-import jakarta.persistence.*;
-import lombok.*;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "coupon_policies")
@@ -58,6 +80,7 @@ public class CouponPolicy {
     @Enumerated(EnumType.STRING)
     @Column(name = "policy_status")
     private CouponPolicyStatus couponPolicyStatus;
+
     // 수량 감소
     public void decreaseQuantity() {
         if (this.quantity == null) {

@@ -1,17 +1,45 @@
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
 package com.nhnacademy.daisobatch.batch;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.when;
 
 import com.nhnacademy.daisobatch.client.UserServiceClient;
 import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
-import com.nhnacademy.daisobatch.entity.CouponPolicy;
-import com.nhnacademy.daisobatch.entity.UserCoupon;
-import com.nhnacademy.daisobatch.repository.CouponPolicyRepository;
-import com.nhnacademy.daisobatch.repository.UserCouponRepository;
+import com.nhnacademy.daisobatch.entity.coupon.CouponPolicy;
+import com.nhnacademy.daisobatch.entity.coupon.UserCoupon;
+import com.nhnacademy.daisobatch.repository.coupon.CouponPolicyRepository;
+import com.nhnacademy.daisobatch.repository.coupon.UserCouponRepository;
 import com.nhnacademy.daisobatch.type.CouponStatus;
 import com.nhnacademy.daisobatch.type.CouponType;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.batch.core.*;
+import org.springframework.batch.core.BatchStatus;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.test.JobLauncherTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,15 +47,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.*;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @SpringBatchTest
@@ -218,6 +237,7 @@ public class BirthdayCouponBatchTest {
         assertThat(coupon.getExpiryAt()).isNotNull();
         assertThat(coupon.getUsedAt()).isNull();
     }
+
     @Test
     @DisplayName("발급된 쿠폰의 만료일이 이번 달 마지막 날인지 확인")
     public void couponExpiryDateTest() throws Exception {
@@ -275,6 +295,7 @@ public class BirthdayCouponBatchTest {
         assertThat(policy.getCouponType()).isEqualTo(CouponType.BIRTHDAY);
         assertThat(policy.getCouponPolicyId()).isEqualTo(4L);
     }
+
     @Test
     @DisplayName("100명의 대량 데이터 처리 테스트 (청크 크기 검증)")
     public void bulkDataProcessingTest() throws Exception {

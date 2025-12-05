@@ -1,10 +1,35 @@
-package com.nhnacademy.daisobatch.entity;
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
+package com.nhnacademy.daisobatch.entity.coupon;
 
 import com.nhnacademy.daisobatch.type.CouponStatus;
-import jakarta.persistence.*;
-import lombok.*;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "user_coupons")
@@ -24,7 +49,7 @@ public class UserCoupon {
     private CouponPolicy couponPolicy;
 
     // User 엔티티 pk 타입이 Long 이라고 가정
-    @Column(name = "user_created_id",nullable = false)
+    @Column(name = "user_created_id", nullable = false)
     private Long userId;
 
     @Enumerated(EnumType.STRING)
@@ -101,7 +126,6 @@ public class UserCoupon {
         return (this.status == CouponStatus.ISSUED || this.status == CouponStatus.CANCELED)
                 && LocalDateTime.now().isBefore(this.expiryAt);
     }
-
 
 
 }
