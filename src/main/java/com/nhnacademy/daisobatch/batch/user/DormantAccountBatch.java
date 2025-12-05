@@ -36,6 +36,7 @@ import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilde
 import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @RequiredArgsConstructor
@@ -84,12 +85,14 @@ public class DormantAccountBatch {
                 // 1. 각 유저별로 가장 '최신' 상태 변경 이력의 ID를 찾습니다.
                 // 2. 위에서 찾은 ID로 실제 상태 정보를 조인합니다.
                 // 3. 조건 필터링: 로그인 날짜 기준 + 현재 상태가 ACTIVE인 사람
+
+                // 로그인 날짜로 검색할 때, 유저별 상태 이력 조인할 때 인덱스 필수!!
                 .queryString("SELECT a FROM Account a " +
                         "JOIN AccountStatusHistory ash ON ash.account = a " +
                         "WHERE a.lastLoginAt < :lastLoginAtBefore " +
                         "AND ash.changedAt = (SELECT MAX(h.changedAt) FROM AccountStatusHistory h WHERE h.account = a) " +
                         "AND ash.status.statusName = 'ACTIVE'" +
-                        "ORDER BY a.loginId ASC")
+                        "ORDER BY a.loginId ASC")   // 페이징 시 동일한 정렬이 보장되어야 페이지 경계에서 누락이나 중복이 발생하지 않음
                 .parameterValues(parameters)
                 .pageSize(CHUNK_SIZE)
                 .entityManagerFactory(entityManagerFactory)
@@ -100,6 +103,7 @@ public class DormantAccountBatch {
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
     public ItemProcessor<Account, Account> dormantAccountProcessor() {
+        // Reader에서 읽은 데이터의 타입을 변환하거나 필터링이 필요할 때
         return account -> account;
 
     }
@@ -123,7 +127,7 @@ public class DormantAccountBatch {
                     params.put("statusId", dormantStatusId);       // 위에서 조회한 휴면 상태 PK
                     params.put("changedAt", LocalDateTime.now());  // 변경 일시
 
-                    return new org.springframework.jdbc.core.namedparam.MapSqlParameterSource(params);
+                    return new MapSqlParameterSource(params);
                 })
                 .build();
     }

@@ -14,6 +14,7 @@ package com.nhnacademy.daisobatch.scheduler.user;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
@@ -42,6 +43,7 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
     // # : 몇 번째 주의 요일 (예: 3#2 → 둘째 주 수요일)
     // ───────────────────────────────────────────────────
     @Scheduled(cron = "0 0 4 * * *")    // 매일 새벽 4시에 휴면 계정 전환 배치 실행
+    @SchedulerLock(name = "dormantAccountJob", lockAtLeastFor = "30s", lockAtMostFor = "10m")
     public void runDormantAccountJob() {
         try {
             log.info("===== 휴면 계정 전환 배치 시작 =====");
