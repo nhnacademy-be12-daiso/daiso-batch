@@ -1,12 +1,27 @@
-package com.nhnacademy.daisobatch.batch;
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
+package com.nhnacademy.daisobatch.batch.coupon;
 
 import com.nhnacademy.daisobatch.client.UserServiceClient;
 import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
-import com.nhnacademy.daisobatch.entity.CouponPolicy;
-import com.nhnacademy.daisobatch.entity.UserCoupon;
-import com.nhnacademy.daisobatch.repository.CouponPolicyRepository;
-import com.nhnacademy.daisobatch.repository.UserCouponRepository;
+import com.nhnacademy.daisobatch.entity.coupon.CouponPolicy;
+import com.nhnacademy.daisobatch.entity.coupon.UserCoupon;
+import com.nhnacademy.daisobatch.repository.coupon.CouponPolicyRepository;
+import com.nhnacademy.daisobatch.repository.coupon.UserCouponRepository;
 import com.nhnacademy.daisobatch.type.CouponStatus;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -20,10 +35,6 @@ import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 
 @Configuration
 public class BirthdayCouponBatch {
@@ -47,29 +58,32 @@ public class BirthdayCouponBatch {
         this.jobRepository = jobRepository;
         this.transactionManager = transactionManager;
     }
+
     // 1. Job 정의
     @Bean
-    public Job birthdayCouponJob(){
+    public Job birthdayCouponJob() {
         return new JobBuilder("birthdayCouponJob", jobRepository)
                 .start(birthdayCouponStep())
                 .build();
     }
+
     // 2. Step 정의
     // 서버가 cpu:2~4코어, 메모리: 4~8GB, DB커넥션 풀:10~20개 일떄
     // chunk = 100일 때 10,000명당 1분 30초 걸림. 회원이 12만명일때까지는 2분내외로 처리 가능!
     @Bean
-    public Step birthdayCouponStep(){
-        return new StepBuilder("birthdayCouponStep",jobRepository)
+    public Step birthdayCouponStep() {
+        return new StepBuilder("birthdayCouponStep", jobRepository)
                 .<BirthdayUserDto, UserCoupon>chunk(100, transactionManager) // 100명씩 끊어서 처리, 1만명이명 1분 30초
                 .reader(birthdayUserReader()) // 100명 읽기
                 .processor(birthdayUserProcessor()) // 100명 변환
                 .writer(birthdayUserWriter()) // 100명 저장 + 커밋
                 .build();
     }
+
     // 3. Reader
     @Bean
     @StepScope
-    public ItemReader<BirthdayUserDto> birthdayUserReader(){
+    public ItemReader<BirthdayUserDto> birthdayUserReader() {
         // 이번 달 구하기
         int currentMonth = LocalDate.now().getMonthValue();
         // User 서버에서 생일자 목록 조회
@@ -81,11 +95,12 @@ public class BirthdayCouponBatch {
         // Reader로 변환
         return new ListItemReader<>(users);
     }
+
     // 4. Processor: DTO -> Entity 변환
     @Bean
     @StepScope
-    public ItemProcessor<BirthdayUserDto, UserCoupon> birthdayUserProcessor(){
-        if(birthdayPolicy == null){
+    public ItemProcessor<BirthdayUserDto, UserCoupon> birthdayUserProcessor() {
+        if (birthdayPolicy == null) {
             birthdayPolicy = couponPolicyRepository.findById(4L)
                     .orElseThrow(() -> new IllegalStateException("생일 쿠폰 정책이 없습니다."));
         }
@@ -99,7 +114,7 @@ public class BirthdayCouponBatch {
 
             boolean alreadyHas = couponRepository.existsByUserIdAndCouponPolicy_CouponPolicyId(
                     item.getUserCreatedId(), 4L);
-            if(alreadyHas){
+            if (alreadyHas) {
                 return null; // null 반환시 Writer에서 스킵.
             }
 
@@ -122,6 +137,7 @@ public class BirthdayCouponBatch {
                     .build();
         };
     }
+
     // 5. Writer: DB에 저장
     @Bean
     public ItemWriter<UserCoupon> birthdayUserWriter() {
