@@ -21,7 +21,6 @@ import java.util.HashMap;
 import java.util.Map;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobScope;
@@ -40,7 +39,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @RequiredArgsConstructor
-@Slf4j
 @Configuration
 public class DormantAccountBatch {
 
@@ -54,7 +52,7 @@ public class DormantAccountBatch {
 
     private final StatusRepository statusRepository;
 
-    private static final int CHUNK_SIZE = 100;
+    private static final int CHUNK_SIZE = 1000;
 
     @Bean
     public Job dormantAccountJob() {
@@ -87,10 +85,10 @@ public class DormantAccountBatch {
                 // 3. 조건 필터링: 로그인 날짜 기준 + 현재 상태가 ACTIVE인 사람
 
                 // 로그인 날짜로 검색할 때, 유저별 상태 이력 조인할 때 인덱스 필수!!
-                .queryString("SELECT a FROM Account a " +
-                        "JOIN AccountStatusHistory ash ON ash.account = a " +
+                .queryString("SELECT a FROM Accounts a " +
+                        "JOIN AccountStatusHistories ash ON ash.account = a " +
                         "WHERE a.lastLoginAt < :lastLoginAtBefore " +
-                        "AND ash.changedAt = (SELECT MAX(h.changedAt) FROM AccountStatusHistory h WHERE h.account = a) " +
+                        "AND ash.changedAt = (SELECT MAX(h.changedAt) FROM AccountStatusHistories h WHERE h.account = a) " +
                         "AND ash.status.statusName = 'ACTIVE'" +
                         "ORDER BY a.loginId ASC")   // 페이징 시 동일한 정렬이 보장되어야 페이지 경계에서 누락이나 중복이 발생하지 않음
                 .parameterValues(parameters)
