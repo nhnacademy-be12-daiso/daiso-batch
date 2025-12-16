@@ -29,12 +29,6 @@ eureka:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
 
 management:
-  tracing:
-    sampling:
-      probability: 0.1
-  zipkin:
-    tracing:
-      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT}
   endpoints:
     web:
       exposure:
