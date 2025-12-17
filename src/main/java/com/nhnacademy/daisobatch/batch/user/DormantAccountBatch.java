@@ -13,7 +13,6 @@
 package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.entity.user.Account;
-import com.nhnacademy.daisobatch.entity.user.Status;
 import com.nhnacademy.daisobatch.exception.StateNotFoundException;
 import com.nhnacademy.daisobatch.repository.user.StatusRepository;
 import jakarta.persistence.EntityManagerFactory;
@@ -59,19 +58,19 @@ public class DormantAccountBatch {
     private static final String DORMANT_STATUS = "DORMANT";
 
     @Bean
-    public Job dormantAccountJob() {
+    public Job dormantAccountJob(Step dormantAccountStep) {
         return new JobBuilder("dormantAccountJob", jobRepository)
-                .start(dormantAccountStep())
+                .start(dormantAccountStep)
                 .build();
     }
 
     @Bean
     @JobScope   // Job이 실행될 때 빈 생성, 끝나면 사라짐
-    public Step dormantAccountStep() {
+    public Step dormantAccountStep(Long dormantStatusId) {
         return new StepBuilder("dormantAccountStep", jobRepository)
                 .<Account, Account>chunk(CHUNK_SIZE, platformTransactionManager)
                 .reader(dormantAccountReader())
-                .writer(dormantAccountWriter())
+                .writer(dormantAccountWriter(dormantStatusId))
                 .build();
     }
 
@@ -88,11 +87,11 @@ public class DormantAccountBatch {
                 // 3. 조건 필터링: 로그인 날짜 기준 + 현재 상태가 ACTIVE인 계정
 
                 // 로그인 날짜로 검색할 때, 계정별 상태 이력 조인할 때 인덱스 필수!!
-                .queryString("SELECT a FROM Account a " +
+                .queryString("SELECT DISTINCT a FROM Account a " +
                         "JOIN AccountStatusHistory ash ON ash.account = a " +
                         "WHERE a.lastLoginAt < :lastLoginAtBefore " +
                         "AND ash.changedAt = (SELECT MAX(h.changedAt) FROM AccountStatusHistory h WHERE h.account = a) " +
-                        "AND ash.status.statusName = 'ACTIVE'" +
+                        "AND ash.status.statusName = 'ACTIVE' " +
                         "ORDER BY a.loginId ASC")   // 페이징 시 동일한 정렬이 보장되어야 페이지 경계에서 누락이나 중복이 발생하지 않음
                 .parameterValues(parameters)
                 .pageSize(CHUNK_SIZE)
@@ -103,15 +102,7 @@ public class DormantAccountBatch {
 
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
-    public JdbcBatchItemWriter<Account> dormantAccountWriter() {
-        Status dormantStatus = statusRepository.findByStatusName(DORMANT_STATUS)
-                .orElseThrow(() -> {
-                    log.error("[배치] dormantAccountWriter 실패: 존재하지 않는 상태 ({})", DORMANT_STATUS);
-                    return new StateNotFoundException("존재하지 않는 상태");
-                });
-
-        long dormantStatusId = dormantStatus.getStatusId();
-
+    public JdbcBatchItemWriter<Account> dormantAccountWriter(Long dormantStatusId) {
         return new JdbcBatchItemWriterBuilder<Account>()
                 .dataSource(dataSource)
                 .sql("INSERT INTO AccountStatusHistories (login_id, status_id, changed_at) VALUES (:loginId, :statusId, :changedAt)")
@@ -126,6 +117,15 @@ public class DormantAccountBatch {
                     return new MapSqlParameterSource(params);
                 })
                 .build();
+    }
+
+    @Bean
+    public Long dormantStatusId() {
+        return statusRepository.findByStatusName(DORMANT_STATUS)
+                .orElseThrow(() -> {
+                    log.error("[배치] dormantAccountWriter 실패: 존재하지 않는 상태 ({})", DORMANT_STATUS);
+                    return new StateNotFoundException("존재하지 않는 상태");
+                }).getStatusId();
     }
 
 }
