@@ -23,13 +23,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RestController
 public class JobController {
+    /**
+     * 테스트용 컨트롤러~~~!!!!!
+     * 즉시 배치 작업 확인하고 싶을 때 이거 쓰기~~
+     */
 
     private final JobLauncher jobLauncher;
+
     private final Job birthdayCouponJob;
     private final Job dormantAccountJob;
+    private final Job gradeChangeJob;
 
     @GetMapping("/batch/birthday")
-    public String runBirthdayJob() {
+    public String runBirthdayJob() {    // 생일 쿠폰 배치 작업
         try {
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("time", System.currentTimeMillis()) // 중복 실행 가능하도록 시간 파라미터 추가
@@ -43,7 +49,7 @@ public class JobController {
     }
 
     @GetMapping("/batch/dormant")
-    public String runDormantJob() {
+    public String runDormantJob() {     // 휴면 계정 전환 배치 작업
         try {
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("time", System.currentTimeMillis())
@@ -52,6 +58,22 @@ public class JobController {
             jobLauncher.run(dormantAccountJob, jobParameters);
 
             return "휴면 계정 전환 배치 작업 완료";
+
+        } catch (Exception e) {
+            return "배치 실행 실패: " + e.getMessage();
+        }
+    }
+
+    @GetMapping("/batch/grade")
+    public String runGradeJob() {   // 등급 변경 배치 작업
+        try {
+            JobParameters jobParameters = new JobParametersBuilder()
+                    .addLong("time", System.currentTimeMillis())
+                    .toJobParameters();
+
+            jobLauncher.run(gradeChangeJob, jobParameters);
+
+            return "등급 변경 배치 작업 완료";
 
         } catch (Exception e) {
             return "배치 실행 실패: " + e.getMessage();

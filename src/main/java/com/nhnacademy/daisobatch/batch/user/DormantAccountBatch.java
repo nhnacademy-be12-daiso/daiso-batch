@@ -14,6 +14,7 @@ package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.entity.user.Account;
 import com.nhnacademy.daisobatch.entity.user.Status;
+import com.nhnacademy.daisobatch.exception.StateNotFoundException;
 import com.nhnacademy.daisobatch.repository.user.StatusRepository;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.LocalDateTime;
@@ -29,7 +30,6 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
@@ -54,7 +54,9 @@ public class DormantAccountBatch {
 
     private final StatusRepository statusRepository;
 
-    private static final int CHUNK_SIZE = 100;
+    private static final int CHUNK_SIZE = 1000;
+
+    private static final String DORMANT_STATUS = "DORMANT";
 
     @Bean
     public Job dormantAccountJob() {
@@ -69,7 +71,6 @@ public class DormantAccountBatch {
         return new StepBuilder("dormantAccountStep", jobRepository)
                 .<Account, Account>chunk(CHUNK_SIZE, platformTransactionManager)
                 .reader(dormantAccountReader())
-                .processor(dormantAccountProcessor())
                 .writer(dormantAccountWriter())
                 .build();
     }
@@ -82,11 +83,11 @@ public class DormantAccountBatch {
         parameters.put("lastLoginAtBefore", LocalDateTime.now().minusDays(90));
 
         return new JpaPagingItemReaderBuilder<Account>()
-                // 1. 각 유저별로 가장 '최신' 상태 변경 이력의 ID를 찾습니다.
+                // 1. 각 계정의 가장 '최신' 상태 변경 이력의 ID를 찾습니다.
                 // 2. 위에서 찾은 ID로 실제 상태 정보를 조인합니다.
-                // 3. 조건 필터링: 로그인 날짜 기준 + 현재 상태가 ACTIVE인 사람
+                // 3. 조건 필터링: 로그인 날짜 기준 + 현재 상태가 ACTIVE인 계정
 
-                // 로그인 날짜로 검색할 때, 유저별 상태 이력 조인할 때 인덱스 필수!!
+                // 로그인 날짜로 검색할 때, 계정별 상태 이력 조인할 때 인덱스 필수!!
                 .queryString("SELECT a FROM Account a " +
                         "JOIN AccountStatusHistory ash ON ash.account = a " +
                         "WHERE a.lastLoginAt < :lastLoginAtBefore " +
@@ -102,17 +103,12 @@ public class DormantAccountBatch {
 
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
-    public ItemProcessor<Account, Account> dormantAccountProcessor() {
-        // Reader에서 읽은 데이터의 타입을 변환하거나 필터링이 필요할 때
-        return account -> account;
-
-    }
-
-    @Bean
-    @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
     public JdbcBatchItemWriter<Account> dormantAccountWriter() {
-        Status dormantStatus = statusRepository.findByStatusName("DORMANT")
-                .orElseThrow(() -> new RuntimeException("존재하지 않는 상태"));
+        Status dormantStatus = statusRepository.findByStatusName(DORMANT_STATUS)
+                .orElseThrow(() -> {
+                    log.error("[배치] dormantAccountWriter 실패: 존재하지 않는 상태 ({})", DORMANT_STATUS);
+                    return new StateNotFoundException("존재하지 않는 상태");
+                });
 
         long dormantStatusId = dormantStatus.getStatusId();
 
@@ -123,7 +119,7 @@ public class DormantAccountBatch {
                     // 파라미터 매핑 (Entity -> SQL 파라미터)
                     Map<String, Object> params = new HashMap<>();
 
-                    params.put("loginId", account.getLoginId()); // Account의 PK
+                    params.put("loginId", account.getLoginId());   // Accounts의 PK
                     params.put("statusId", dormantStatusId);       // 위에서 조회한 휴면 상태 PK
                     params.put("changedAt", LocalDateTime.now());  // 변경 일시
 
