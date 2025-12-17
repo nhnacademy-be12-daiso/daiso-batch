@@ -12,8 +12,8 @@
 
 package com.nhnacademy.daisobatch.repository.user;
 
-import com.nhnacademy.user.entity.user.User;
-import com.nhnacademy.user.entity.user.UserGradeHistory;
+import com.nhnacademy.daisobatch.entity.user.User;
+import com.nhnacademy.daisobatch.entity.user.UserGradeHistory;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;

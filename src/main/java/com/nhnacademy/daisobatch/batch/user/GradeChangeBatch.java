@@ -74,8 +74,8 @@ public class GradeChangeBatch {
 
     @Bean
     public JpaPagingItemReader<User> gradeChangeReader() {
-        // 현재 상태가 ACTIVE인 계정 조회
         return new JpaPagingItemReaderBuilder<User>()
+                // 현재 상태가 ACTIVE인 계정 조회
                 .queryString("SELECT u FROM Users u " +
                         "JOIN u.account a " +
                         "JOIN AccountStatusHistories ash ON ash.account = a " +
