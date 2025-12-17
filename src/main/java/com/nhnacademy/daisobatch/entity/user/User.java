@@ -12,13 +12,15 @@
 
 package com.nhnacademy.daisobatch.entity.user;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
-import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -34,15 +36,7 @@ public class User {     // 회원 기본 정보
     @Column(name = "user_created_id")
     private Long userCreatedId;             // 회원 고유 ID (PK, AI)
 
-    @Column(name = "user_name", nullable = false, length = 30)
-    private String userName;                // 회원 이름
-
-    @Column(name = "phone_number", unique = true, length = 30)
-    private String phoneNumber;             // 연락처 (UK)
-
-    @Column(unique = true, length = 80)
-    private String email;                    // 이메일 (UK)
-
-    private LocalDate birth;                 // 생년월일, YYYY-MM-DD 패턴
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private Account account;                // 연관 계정, 일대일 관계, User 삭제 시 Account 함께 삭제
 
 }

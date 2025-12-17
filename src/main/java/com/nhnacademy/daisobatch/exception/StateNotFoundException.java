@@ -10,14 +10,11 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.repository.user;
+package com.nhnacademy.daisobatch.exception;
 
-import com.nhnacademy.daisobatch.entity.user.UserGradeHistory;
-import org.springframework.data.jpa.repository.JpaRepository;
-
-public interface UserGradeHistoryRepository extends JpaRepository<UserGradeHistory, Long> {
-
-    // 회원의 현재 등급 ID 조회
-    UserGradeHistory findTopByUser_UserCreatedIdOrderByChangedAtDesc(Long userCreatedId);
-
+// 상태 정보가 DB에 없을 때
+public class StateNotFoundException extends RuntimeException {
+    public StateNotFoundException(String message) {
+        super(message);
+    }
 }

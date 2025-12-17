@@ -29,8 +29,10 @@ public class JobController {
      */
 
     private final JobLauncher jobLauncher;
+
     private final Job birthdayCouponJob;
     private final Job dormantAccountJob;
+    private final Job gradeChangeJob;
 
     @GetMapping("/batch/birthday")
     public String runBirthdayJob() {    // 생일 쿠폰 배치 작업
@@ -56,6 +58,22 @@ public class JobController {
             jobLauncher.run(dormantAccountJob, jobParameters);
 
             return "휴면 계정 전환 배치 작업 완료";
+
+        } catch (Exception e) {
+            return "배치 실행 실패: " + e.getMessage();
+        }
+    }
+
+    @GetMapping("/batch/grade")
+    public String runGradeJob() {   // 등급 변경 배치 작업
+        try {
+            JobParameters jobParameters = new JobParametersBuilder()
+                    .addLong("time", System.currentTimeMillis())
+                    .toJobParameters();
+
+            jobLauncher.run(gradeChangeJob, jobParameters);
+
+            return "등급 변경 배치 작업 완료";
 
         } catch (Exception e) {
             return "배치 실행 실패: " + e.getMessage();

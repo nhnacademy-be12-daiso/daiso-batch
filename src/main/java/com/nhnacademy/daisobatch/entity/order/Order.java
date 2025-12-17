@@ -10,30 +10,47 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.entity.user;
+package com.nhnacademy.daisobatch.entity.order;
 
+import com.nhnacademy.daisobatch.type.OrderStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.ZonedDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "Grades")
+@Table(name = "Orders")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Grade {    // 회원 등급 및 혜택 정보
+public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "grade_id")
-    private Long gradeId;           // 등급 고유 ID (PK, AI)
+    @Column(name = "order_id")
+    private Long orderId;
 
-    @Column(name = "grade_name", nullable = false, length = 10)
-    private String gradeName;       // GENERAL, ROYAL, GOLD, PLATINUM
+    @Column(name = "user_created_id")
+    private Long userCreatedId;
+
+    @Column(name = "order_number", unique = true)
+    private Long orderNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_status")
+    private OrderStatus orderStatus;
+
+    @Column(name = "order_date")
+    private ZonedDateTime orderDate;
+
+    @Column(name = "total_price")
+    private Long totalPrice;
 
 }

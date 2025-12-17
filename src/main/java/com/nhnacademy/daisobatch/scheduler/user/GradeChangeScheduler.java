@@ -25,39 +25,28 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @Slf4j
 @Component
-public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케줄러
+public class GradeChangeScheduler { // 등급 변경 자동 전환 스케줄러
 
     private final JobLauncher jobLauncher;
 
-    private final Job dormantAccountJob;
+    private final Job gradeChangeJob;
 
-    //  Cron 표현식 설명 (cron = "초 분 시 일 월 요일 년")
-    // ───────────────────────────────────────────────────
-    // * : 모든 값
-    // ? : 특정 값 없음
-    // - : 범위 (예: MON-WED)
-    // , : 여러 값 지정 (예: MON,WED,FRI)
-    // / : 주기 설정 (예: 0/5 → 0분부터 5분 간격)
-    // L : 마지막 (예: 월의 마지막 날, 요일의 마지막 요일)
-    // W : 가장 가까운 평일 (예: 15W → 15일 기준 가장 가까운 평일)
-    // # : 몇 번째 주의 요일 (예: 3#2 → 둘째 주 수요일)
-    // ───────────────────────────────────────────────────
-    @Scheduled(cron = "0 0 4 * * *")    // 매일 새벽 4시에 휴면 계정 전환 배치 실행
-    @SchedulerLock(name = "dormantAccountJob", lockAtLeastFor = "30s", lockAtMostFor = "10m")
-    public void runDormantAccountJob() {
+    @Scheduled(cron = "0 0 1 * * *")    // 매일 새벽 1시에 등급 변경 배치 실행
+    @SchedulerLock(name = "gradeChangeJob", lockAtLeastFor = "30s", lockAtMostFor = "10m")
+    public void runGradeChangeJob() {
         try {
-            log.debug("===== 휴면 계정 전환 배치 시작 =====");
+            log.debug("===== 등급 변경 배치 시작 =====");
 
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("time", System.currentTimeMillis())
                     .toJobParameters();
 
-            jobLauncher.run(dormantAccountJob, jobParameters);
+            jobLauncher.run(gradeChangeJob, jobParameters);
 
-            log.debug("===== 휴면 계정 전환 배치 종료 =====");
+            log.debug("===== 등급 변경 배치 종료 =====");
 
         } catch (Exception e) {
-            log.error("휴면 계정 전환 배치 실패", e);
+            log.error("등급 변경 배치 실패", e);
         }
     }
 

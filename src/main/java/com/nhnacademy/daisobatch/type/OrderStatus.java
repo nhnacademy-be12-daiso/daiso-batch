@@ -10,15 +10,12 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.repository.user;
+package com.nhnacademy.daisobatch.type;
 
-import com.nhnacademy.daisobatch.entity.user.Grade;
-import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
-
-public interface GradeRepository extends JpaRepository<Grade, Long> {
-
-    // GradeName으로 조회 (GENERAL, ROYAL, GOLD, PLATINUM)
-    Optional<Grade> findByGradeName(String gradeName);
-
+public enum OrderStatus {
+    PENDING,
+    IN_TRANSIT,
+    COMPLETED,
+    RETURN,
+    CANCEL
 }
