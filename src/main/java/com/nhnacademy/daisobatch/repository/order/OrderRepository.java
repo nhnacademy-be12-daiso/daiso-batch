@@ -28,7 +28,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "FROM Order o " +
             "WHERE o.userCreatedId = :userCreatedId " +
             "AND o.orderDate >= :startDate " +
-            "AND o.orderStatus >= :orderStatus")
+            "AND o.orderStatus = :orderStatus")
     long calculateTotalAmount(Long userCreatedId, ZonedDateTime startDate, OrderStatus orderStatus);
 
 }
