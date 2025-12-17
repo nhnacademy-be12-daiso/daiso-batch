@@ -11,6 +11,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none  # 배치는 테이블 생성 안 함
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: true
 
   batch:
