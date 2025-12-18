@@ -38,7 +38,7 @@ public class JobController {
     public String runBirthdayJob() {    // 생일 쿠폰 배치 작업
         try {
             JobParameters jobParameters = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis()) // 중복 실행 가능하도록 시간 파라미터 추가
+                    .addLong("runDate", System.currentTimeMillis()) // 중복 실행 가능하도록 시간 파라미터 추가
                     .toJobParameters();
             jobLauncher.run(birthdayCouponJob, jobParameters);
             return "생일 쿠폰 배치 실행 완료!";
