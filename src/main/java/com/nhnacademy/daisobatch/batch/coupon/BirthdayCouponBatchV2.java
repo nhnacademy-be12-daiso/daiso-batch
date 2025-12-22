@@ -62,67 +62,79 @@ public class BirthdayCouponBatchV2 {
     // ===== 3. Reader: User 서버에서 조회 =====
     @Bean
     @StepScope
-    @Profile("!dev")
     public ItemReader<BirthdayUserDto> birthdayUserReader() {
-        return new ItemReader<BirthdayUserDto>() {
-            private List<BirthdayUserDto> users;
+        return new ItemReader<>() {
+            private List<BirthdayUserDto> users = null;
             private int currentIndex = 0;
+
+            private int page = 0;
+            private final int size = 1000; // api page size
+
+            private boolean lastPage = false; // 종료 플래그
 
             @Override
             public BirthdayUserDto read() {
-                // 첫 호출 시 User 서버에서 데이터 로드
-                if (users == null) {
+                // 현재 페이지가 비었거나 다 소진했으면 다음 페이지 로드
+                if (users == null || currentIndex >= users.size()) {
+                    if(lastPage){
+                        return null;
+                    }
                     int currentMonth = LocalDate.now().getMonthValue();
-//                    int currentMonth = 10;
-                    log.info("User 서버에서 {}월 생일자 조회", currentMonth);
+                    log.info("User 서버에서 {}월 생일자 조회 - page={}, size={}", currentMonth, page, size);
 
-                    users = userServiceClient.getBirthdayUsers(currentMonth);
+
+                    users = userServiceClient.getBirthdayUsers(currentMonth, page, size);
+                    currentIndex = 0;
 
                     if (users == null || users.isEmpty()) {
-                        log.info("{}월 생일자 없음", currentMonth);
+                        log.info("{}월 생일자 더 없음(빈 페이지) - 종료", currentMonth);
+                        lastPage = true;
                         return null;
                     }
 
-                    log.info("{}월 생일자 {}명 조회 완료", currentMonth, users.size());
-                }
+                    log.info("{}월 생일자 page={} 조회 {}명", currentMonth, page, users.size());
 
-                // 하나씩 반환
-                if (currentIndex < users.size()) {
-                    return users.get(currentIndex++);
-                }
+                    // List 기반 마지막 페이지 판정: size보다 작으면 마지막
+                    if(users.size() < size){
+                        lastPage = true;
+                    } else{
+                        page++; // 다음 페이지로
+                    }
 
-                return null; // 끝
+                }
+                return users.get(currentIndex++);
             }
         };
     }
 
-    @Bean
-    @StepScope
-    @Profile("dev")
-    public ItemReader<BirthdayUserDto> perfBirthdayUserReader(
-            @Value("#{jobParameters['total']}") Long totalParam,
-            @Value("#{jobParameters['month']}") Long monthParam
-    ) {
-        final long total = (totalParam == null) ? 100_000L : totalParam;
-        final int month = (monthParam == null) ? 10 : monthParam.intValue();
-
-        return new ItemReader<>() {
-            private long idx = 0;
-
-            @Override
-            public BirthdayUserDto read() {
-                if (idx >= total) return null;
-
-                BirthdayUserDto dto = new BirthdayUserDto();
-                dto.setUserCreatedId(1_000_000L + idx);
-                dto.setUsername("dev-" + idx);
-                dto.setBirth(LocalDate.of(1990, month, (int)((idx % 28) + 1)));
-
-                idx++;
-                return dto;
-            }
-        };
-    }
+//    @Bean
+//    @StepScope
+//    @Profile("dev")
+//    public ItemReader<BirthdayUserDto> perfBirthdayUserReader(
+//            @Value("#{jobParameters['total']}") Long totalParam,
+//            @Value("#{jobParameters['month']}") Long monthParam
+//    ) {
+////        final long total = (totalParam == null) ? 100_000L : totalParam;
+//        final long total = 100L;
+//        final int month = (monthParam == null) ? 10 : monthParam.intValue();
+//
+//        return new ItemReader<>() {
+//            private long idx = 0;
+//
+//            @Override
+//            public BirthdayUserDto read() {
+//                if (idx >= total) return null;
+//
+//                BirthdayUserDto dto = new BirthdayUserDto();
+//                dto.setUserCreatedId(1_000_000L + idx);
+//                dto.setUsername("dev-" + idx);
+//                dto.setBirth(LocalDate.of(1990, month, (int)((idx % 28) + 1)));
+//
+//                idx++;
+//                return dto;
+//            }
+//        };
+//    }
 
 
     // ===== 4. Processor: DTO -> Long 변환 =====

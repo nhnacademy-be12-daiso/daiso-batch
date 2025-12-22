@@ -1,4 +1,4 @@
-package com.nhnacademy.daisobatch.dto;
+package com.nhnacademy.daisobatch.dto.coupon;
 
 import com.nhnacademy.daisobatch.type.CouponPolicyStatus;
 import com.nhnacademy.daisobatch.type.CouponType;
