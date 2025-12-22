@@ -33,7 +33,7 @@ build/
 .vscode/
 
 /src/main/resources/application-dev.yml
-/src/main/resources/application-test.yml
+/src/test/resources/application-test.yml
 
 data/*.mv.db
 data/*.trace.db

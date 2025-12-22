@@ -38,3 +38,8 @@ management:
   endpoint:
     health:
       show-details: always
+
+rabbitmq:
+  birthday:
+    exchange: team3.coupon.birthday.exchange
+    routing-key: team3.coupon.birthday

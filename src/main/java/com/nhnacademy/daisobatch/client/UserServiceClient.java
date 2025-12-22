@@ -7,10 +7,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
+
 @FeignClient(name = "TEAM3-USER")
 //@FeignClient(name = "user-service", url = "${user.service.url}")
 public interface UserServiceClient {
 
     @GetMapping("/api/users/birthday")
-    List<BirthdayUserDto> getBirthdayUsers(@RequestParam("month") int month);
+    List<BirthdayUserDto> getBirthdayUsers(
+            @RequestParam("month") int month,
+            @RequestParam("page") int page,
+            @RequestParam("size") int size
+            );
 }

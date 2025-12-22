@@ -12,7 +12,7 @@
 
 package com.nhnacademy.daisobatch.entity.coupon;
 
-import com.nhnacademy.daisobatch.dto.CouponPolicyUpdateRequest;
+import com.nhnacademy.daisobatch.dto.coupon.CouponPolicyUpdateRequest;
 import com.nhnacademy.daisobatch.type.CouponPolicyStatus;
 import com.nhnacademy.daisobatch.type.CouponType;
 import com.nhnacademy.daisobatch.type.DiscountWay;
