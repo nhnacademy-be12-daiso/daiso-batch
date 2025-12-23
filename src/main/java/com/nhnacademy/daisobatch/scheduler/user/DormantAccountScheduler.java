@@ -12,6 +12,8 @@
 
 package com.nhnacademy.daisobatch.scheduler.user;
 
+import com.nhnacademy.daisobatch.exception.StateNotFoundException;
+import com.nhnacademy.daisobatch.repository.user.StatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -31,6 +33,10 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
 
     private final Job dormantAccountJob;
 
+    private final StatusRepository statusRepository;
+
+    private static final String DORMANT_STATUS = "DORMANT";
+
     //  Cron 표현식 설명 (cron = "초 분 시 일 월 요일 년")
     // ───────────────────────────────────────────────────
     // * : 모든 값
@@ -43,13 +49,17 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
     // # : 몇 번째 주의 요일 (예: 3#2 → 둘째 주 수요일)
     // ───────────────────────────────────────────────────
     @Scheduled(cron = "0 0 4 * * *")    // 매일 새벽 4시에 휴면 계정 전환 배치 실행
-    @SchedulerLock(name = "dormantAccountJob", lockAtLeastFor = "30s", lockAtMostFor = "10m")
+    @SchedulerLock(name = "dormantAccountJob", lockAtLeastFor = "30s", lockAtMostFor = "30m")
     public void runDormantAccountJob() {
         try {
+            // 실행 시점에 안전하게 상태 ID 조회
+            Long statusId = getDormantStatusId();
+
             log.debug("===== 휴면 계정 전환 배치 시작 =====");
 
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("time", System.currentTimeMillis())
+                    .addLong("dormantStatusId", statusId)
                     .toJobParameters();
 
             jobLauncher.run(dormantAccountJob, jobParameters);
@@ -59,6 +69,14 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
         } catch (Exception e) {
             log.error("휴면 계정 전환 배치 실패", e);
         }
+    }
+
+    public Long getDormantStatusId() {
+        return statusRepository.findByStatusName(DORMANT_STATUS)
+                .orElseThrow(() -> {
+                    log.error("[DormantAccountScheduler] getDormantStatusId 실패: 존재하지 않는 상태 ({})", DORMANT_STATUS);
+                    return new StateNotFoundException("존재하지 않는 상태");
+                }).getStatusId();
     }
 
 }

@@ -13,8 +13,7 @@
 package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.entity.user.Account;
-import com.nhnacademy.daisobatch.exception.StateNotFoundException;
-import com.nhnacademy.daisobatch.repository.user.StatusRepository;
+import com.nhnacademy.daisobatch.listener.CustomChunkListener;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -33,6 +32,7 @@ import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -51,11 +51,7 @@ public class DormantAccountBatch {
 
     private final DataSource dataSource;                        // JDBC Writer
 
-    private final StatusRepository statusRepository;
-
     private static final int CHUNK_SIZE = 1000;
-
-    private static final String DORMANT_STATUS = "DORMANT";
 
     @Bean
     public Job dormantAccountJob(Step dormantAccountStep) {
@@ -66,11 +62,15 @@ public class DormantAccountBatch {
 
     @Bean
     @JobScope   // Job이 실행될 때 빈 생성, 끝나면 사라짐
-    public Step dormantAccountStep(Long dormantStatusId) {
+    public Step dormantAccountStep(@Value("#{jobParameters['dormantStatusId']}") Long dormantStatusId) {
         return new StepBuilder("dormantAccountStep", jobRepository)
                 .<Account, Account>chunk(CHUNK_SIZE, platformTransactionManager)
                 .reader(dormantAccountReader())
                 .writer(dormantAccountWriter(dormantStatusId))
+                .faultTolerant()
+                .skip(Exception.class)  // 모든 예외에 대해 스킵 허용
+                .skipLimit(100)         // 최대 100건까지 에러 나도 배치 게속 진행
+                .listener(new CustomChunkListener())
                 .build();
     }
 
@@ -87,7 +87,7 @@ public class DormantAccountBatch {
                 // 3. 조건 필터링: 로그인 날짜 기준 + 현재 상태가 ACTIVE인 계정
 
                 // 로그인 날짜로 검색할 때, 계정별 상태 이력 조인할 때 인덱스 필수!!
-                .queryString("SELECT DISTINCT a FROM Account a " +
+                .queryString("SELECT a FROM Account a " +
                         "JOIN AccountStatusHistory ash ON ash.account = a " +
                         "WHERE a.lastLoginAt < :lastLoginAtBefore " +
                         "AND ash.changedAt = (SELECT MAX(h.changedAt) FROM AccountStatusHistory h WHERE h.account = a) " +
@@ -97,12 +97,14 @@ public class DormantAccountBatch {
                 .pageSize(CHUNK_SIZE)
                 .entityManagerFactory(entityManagerFactory)
                 .name("dormantAccountReader")
+                .saveState(false)   // 페이징 꼬임 방지: 항상 0페이지부터 읽기 유도
                 .build();
     }
 
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
-    public JdbcBatchItemWriter<Account> dormantAccountWriter(Long dormantStatusId) {
+    public JdbcBatchItemWriter<Account> dormantAccountWriter(
+            @Value("#{jobParameters['dormantStatusId']}") Long dormantStatusId) {
         return new JdbcBatchItemWriterBuilder<Account>()
                 .dataSource(dataSource)
                 .sql("INSERT INTO AccountStatusHistories (login_id, status_id, changed_at) VALUES (:loginId, :statusId, :changedAt)")
@@ -117,15 +119,6 @@ public class DormantAccountBatch {
                     return new MapSqlParameterSource(params);
                 })
                 .build();
-    }
-
-    @Bean
-    public Long dormantStatusId() {
-        return statusRepository.findByStatusName(DORMANT_STATUS)
-                .orElseThrow(() -> {
-                    log.error("[배치] dormantAccountWriter 실패: 존재하지 않는 상태 ({})", DORMANT_STATUS);
-                    return new StateNotFoundException("존재하지 않는 상태");
-                }).getStatusId();
     }
 
 }
