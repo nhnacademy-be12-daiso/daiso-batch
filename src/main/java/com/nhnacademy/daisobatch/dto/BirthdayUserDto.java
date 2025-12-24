@@ -1,14 +1,14 @@
 package com.nhnacademy.daisobatch.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.time.LocalDate;
 
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class BirthdayUserDto {
     private Long userCreatedId;
-    private String username; // 로그용
-    private LocalDate birth; // 설계용
 }
