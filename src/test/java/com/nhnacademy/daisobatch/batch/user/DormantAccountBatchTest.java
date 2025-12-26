@@ -15,6 +15,8 @@ package com.nhnacademy.daisobatch.batch.user;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +37,10 @@ import org.springframework.test.context.jdbc.Sql;
 @SpringBatchTest
 @SpringBootTest
 @ActiveProfiles("test")
-@Sql(scripts = "/sql/user/dormant-data.sql")
+@Sql(scripts = {
+        "/sql/user/schema.sql",
+        "/sql/user/dormant-data.sql"
+})
 public class DormantAccountBatchTest {
 
     @Autowired
@@ -54,31 +59,44 @@ public class DormantAccountBatchTest {
     }
 
     @Test
-    @DisplayName("90일 이상 미접속이면서 상태가 ACTIVE인 계정은 휴면 상태 이력이 생성되어야 함")
+    @DisplayName("휴면 전환 배치 실행 시, 대상자는 DORMANT로 변경되고 비대상자는 ACTIVE를 유지해야 함")
     void test1() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        String baseDateStr = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+
         JobParameters jobParameters = new JobParametersBuilder()
-                .addString("baseDate", LocalDateTime.now().toString())
+                .addString("baseDate", baseDateStr)
                 .toJobParameters();
 
         JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
 
         assertThat(jobExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 
-        String targetSql = "SELECT status_id FROM AccountStatusHistories " +
-                "WHERE login_id = 'targetUser' " +
-                "ORDER BY changed_at DESC LIMIT 1";
-        Long targetStatusId = jdbcTemplate.queryForObject(targetSql, Long.class);
-        assertThat(targetStatusId).isEqualTo(2L);   // DORMANT
+        // Accounts 테이블의 현재 상태가 DORMANT(2)인지 확인
+        Map<String, Object> targetAccount = jdbcTemplate.queryForMap(
+                "SELECT current_status_id FROM Accounts WHERE login_id = 'targetUser'");
+        assertThat(targetAccount.get("current_status_id")).isEqualTo(2L);
 
-        String countSql = "SELECT COUNT(*) FROM AccountStatusHistories WHERE login_id = 'targetUser'";
-        Integer count = jdbcTemplate.queryForObject(countSql, Integer.class);
-        assertThat(count).isEqualTo(2);
+        // AccountStatusHistories에 이력이 추가되었는지 확인 (총 2건: 초기 ACTIVE + 신규 DORMANT)
+        Integer targetHistoryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM AccountStatusHistories WHERE login_id = 'targetUser'", Integer.class);
+        assertThat(targetHistoryCount).isEqualTo(2);
 
-        String activeSql = "SELECT status_id FROM AccountStatusHistories " +
-                "WHERE login_id = 'activeUser' " +
-                "ORDER BY changed_at DESC LIMIT 1";
-        Long activeStatusId = jdbcTemplate.queryForObject(activeSql, Long.class);
-        assertThat(activeStatusId).isEqualTo(1L);   // ACTIVE
+        // 가장 최근 이력의 상태와 변경 시간이 baseDate와 일치하는지 확인
+        Map<String, Object> latestHistory = jdbcTemplate.queryForMap(
+                "SELECT status_id, changed_at FROM AccountStatusHistories WHERE login_id = 'targetUser' ORDER BY changed_at DESC LIMIT 1");
+        assertThat(latestHistory.get("status_id")).isEqualTo(2L);
+        assertThat(latestHistory.get("changed_at").toString()).contains(now.toLocalDate().toString());
+
+        // Accounts 테이블의 현재 상태가 ACTIVE(1)를 유지하는지 확인
+        Map<String, Object> activeAccount = jdbcTemplate.queryForMap(
+                "SELECT current_status_id FROM Accounts WHERE login_id = 'activeUser'");
+        assertThat(activeAccount.get("current_status_id")).isEqualTo(1L);
+
+        // 이력이 추가되지 않았는지 확인 (초기 1건 유지)
+        Integer activeHistoryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM AccountStatusHistories WHERE login_id = 'activeUser'", Integer.class);
+        assertThat(activeHistoryCount).isEqualTo(1);
     }
 
 }
