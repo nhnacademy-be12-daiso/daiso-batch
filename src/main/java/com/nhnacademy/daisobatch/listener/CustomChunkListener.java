@@ -10,15 +10,28 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.repository.user;
+package com.nhnacademy.daisobatch.listener;
 
-import com.nhnacademy.daisobatch.entity.user.Status;
-import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.ChunkListener;
+import org.springframework.batch.core.scope.context.ChunkContext;
 
-public interface StatusRepository extends JpaRepository<Status, Long> {
+@Slf4j
+public class CustomChunkListener implements ChunkListener {
 
-    // StatusName으로 조회 (ACTIVE, DORMANT, WITHDRAWN, BANNED)
-    Optional<Status> findByStatusName(String statusName);
+    @Override
+    public void beforeChunk(ChunkContext context) {
+        log.debug("before chunk: {}", context.getStepContext().getStepExecution().getReadCount());
+    }
+
+    @Override
+    public void afterChunk(ChunkContext context) {
+        log.debug("after chunk success");
+    }
+
+    @Override
+    public void afterChunkError(ChunkContext context) {
+        log.error("after chunk error");
+    }
 
 }

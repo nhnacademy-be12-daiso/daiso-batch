@@ -43,3 +43,8 @@ rabbitmq:
   birthday:
     exchange: team3.coupon.birthday.exchange
     routing-key: team3.coupon.birthday
+
+batch:
+  dormant:
+    days: 90
+    chunk-size: 1000

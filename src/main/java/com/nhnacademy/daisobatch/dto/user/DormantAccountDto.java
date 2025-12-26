@@ -10,11 +10,10 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.exception;
+package com.nhnacademy.daisobatch.dto.user;
 
-// 상태 정보가 DB에 없을 때
-public class StateNotFoundException extends RuntimeException {
-    public StateNotFoundException(String message) {
-        super(message);
-    }
+import java.time.LocalDateTime;
+
+public record DormantAccountDto(String loginId,
+                                LocalDateTime lastLoginAt) {
 }
