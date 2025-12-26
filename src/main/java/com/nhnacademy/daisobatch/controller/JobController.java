@@ -12,15 +12,17 @@
 
 package com.nhnacademy.daisobatch.controller;
 
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDateTime;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RequiredArgsConstructor
+@Slf4j
 @RestController
 public class JobController {
     /**
@@ -31,8 +33,18 @@ public class JobController {
     private final JobLauncher jobLauncher;
 
     private final Job birthdayCouponJob;
+
     private final Job dormantAccountJob;
-    private final Job gradeChangeJob;
+
+//    private final Job gradeChangeJob;
+
+    public JobController(JobLauncher jobLauncher,
+                         @Qualifier("birthdayCouponJob") Job birthdayCouponJob,
+                         @Qualifier("dormantAccountJob") Job dormantAccountJob) {
+        this.jobLauncher = jobLauncher;
+        this.birthdayCouponJob = birthdayCouponJob;
+        this.dormantAccountJob = dormantAccountJob;
+    }
 
     @GetMapping("/batch/birthday")
     public String runBirthdayJob() {    // 생일 쿠폰 배치 작업
@@ -52,7 +64,7 @@ public class JobController {
     public String runDormantJob() {     // 휴면 계정 전환 배치 작업
         try {
             JobParameters jobParameters = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
+                    .addString("baseDate", LocalDateTime.now().toString())
                     .toJobParameters();
 
             jobLauncher.run(dormantAccountJob, jobParameters);
@@ -60,24 +72,25 @@ public class JobController {
             return "휴면 계정 전환 배치 작업 완료";
 
         } catch (Exception e) {
+            log.error("휴면 계정 전환 배치 실패", e);
             return "배치 실행 실패: " + e.getMessage();
         }
     }
 
-    @GetMapping("/batch/grade")
-    public String runGradeJob() {   // 등급 변경 배치 작업
-        try {
-            JobParameters jobParameters = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
-                    .toJobParameters();
-
-            jobLauncher.run(gradeChangeJob, jobParameters);
-
-            return "등급 변경 배치 작업 완료";
-
-        } catch (Exception e) {
-            return "배치 실행 실패: " + e.getMessage();
-        }
-    }
+//    @GetMapping("/batch/grade")
+//    public String runGradeJob() {   // 등급 변경 배치 작업
+//        try {
+//            JobParameters jobParameters = new JobParametersBuilder()
+//                    .addLong("time", System.currentTimeMillis())
+//                    .toJobParameters();
+//
+//            jobLauncher.run(gradeChangeJob, jobParameters);
+//
+//            return "등급 변경 배치 작업 완료";
+//
+//        } catch (Exception e) {
+//            return "배치 실행 실패: " + e.getMessage();
+//        }
+//    }
 
 }

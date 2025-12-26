@@ -12,6 +12,7 @@
 
 package com.nhnacademy.daisobatch.scheduler.user;
 
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -28,7 +29,6 @@ import org.springframework.stereotype.Component;
 public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케줄러
 
     private final JobLauncher jobLauncher;
-
     private final Job dormantAccountJob;
 
     //  Cron 표현식 설명 (cron = "초 분 시 일 월 요일 년")
@@ -43,18 +43,18 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
     // # : 몇 번째 주의 요일 (예: 3#2 → 둘째 주 수요일)
     // ───────────────────────────────────────────────────
     @Scheduled(cron = "0 0 4 * * *")    // 매일 새벽 4시에 휴면 계정 전환 배치 실행
-    @SchedulerLock(name = "dormantAccountJob", lockAtLeastFor = "30s", lockAtMostFor = "10m")
+    @SchedulerLock(name = "dormantAccountJob", lockAtLeastFor = "30s", lockAtMostFor = "30m")
     public void runDormantAccountJob() {
         try {
-            log.debug("===== 휴면 계정 전환 배치 시작 =====");
+            log.info(">>>>> 휴면 계정 전환 배치 시작 [{}]", LocalDateTime.now());
 
             JobParameters jobParameters = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
+                    .addString("baseDate", LocalDateTime.now().toString())
                     .toJobParameters();
 
             jobLauncher.run(dormantAccountJob, jobParameters);
 
-            log.debug("===== 휴면 계정 전환 배치 종료 =====");
+            log.info("<<<<< 휴면 계정 전환 배치 완료");
 
         } catch (Exception e) {
             log.error("휴면 계정 전환 배치 실패", e);

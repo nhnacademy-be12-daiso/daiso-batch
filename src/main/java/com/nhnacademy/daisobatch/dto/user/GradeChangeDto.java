@@ -10,9 +10,9 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.dto.user;
-
-public record GradeChangeDto(Long userCreatedId,
-                             Long gradeId,
-                             String reason) {
-}
+//package com.nhnacademy.daisobatch.dto.user;
+//
+//public record GradeChangeDto(Long userCreatedId,
+//                             Long gradeId,
+//                             String reason) {
+//}
