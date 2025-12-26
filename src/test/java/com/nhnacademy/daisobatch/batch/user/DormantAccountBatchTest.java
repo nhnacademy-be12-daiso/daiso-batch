@@ -14,6 +14,7 @@ package com.nhnacademy.daisobatch.batch.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,7 @@ public class DormantAccountBatchTest {
     @DisplayName("90일 이상 미접속이면서 상태가 ACTIVE인 계정은 휴면 상태 이력이 생성되어야 함")
     void test1() throws Exception {
         JobParameters jobParameters = new JobParametersBuilder()
-                .addLong("time", System.currentTimeMillis())
+                .addString("baseDate", LocalDateTime.now().toString())
                 .toJobParameters();
 
         JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);

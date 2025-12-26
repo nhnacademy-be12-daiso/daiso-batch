@@ -147,7 +147,7 @@ public class DormantAccountBatch {
                         "SELECT status_id FROM Statuses WHERE status_name = 'DORMANT'" +
                         ") WHERE login_id = :loginId")
                 .beanMapped()
-                .assertUpdates(true)    // 업데이트 대상 없으면 예외 발생
+                .assertUpdates(false)    // 만약 Reader가 읽은 후 Writer가 실행되기 직전에 사용자가 로그인하여 상태가 변했을 때
                 .build();
     }
 
@@ -155,9 +155,7 @@ public class DormantAccountBatch {
     @StepScope
     public JdbcBatchItemWriter<DormantAccountDto> insertStatusHistoryWriter(
             @Value("#{jobParameters['baseDate']}") String baseDateStr) {
-        LocalDateTime baseDate = (baseDateStr != null)
-                ? LocalDateTime.parse(baseDateStr)
-                : LocalDateTime.now();
+        LocalDateTime baseDate = (baseDateStr != null) ? LocalDateTime.parse(baseDateStr) : LocalDateTime.now();
 
         return new JdbcBatchItemWriterBuilder<DormantAccountDto>()
                 .dataSource(dataSource)
