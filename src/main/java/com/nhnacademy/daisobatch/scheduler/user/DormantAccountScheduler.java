@@ -12,6 +12,7 @@
 
 package com.nhnacademy.daisobatch.scheduler.user;
 
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -19,7 +20,6 @@ import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -30,10 +30,6 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
 
     private final JobLauncher jobLauncher;
     private final Job dormantAccountJob;
-    private final JdbcTemplate jdbcTemplate;
-
-    private static final String ACTIVE_STATUS = "ACTIVE";
-    private static final String DORMANT_STATUS = "DORMANT";
 
     //  Cron 표현식 설명 (cron = "초 분 시 일 월 요일 년")
     // ───────────────────────────────────────────────────
@@ -50,30 +46,19 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
     @SchedulerLock(name = "dormantAccountJob", lockAtLeastFor = "30s", lockAtMostFor = "30m")
     public void runDormantAccountJob() {
         try {
-            // 실행 시점에 안전하게 상태 ID 조회
-            Long activeId = getStatusIdByName(ACTIVE_STATUS);
-            Long dormantId = getStatusIdByName(DORMANT_STATUS);
-
-            log.debug("===== 휴면 계정 전환 배치 시작 =====");
+            log.info(">>>>> 휴면 계정 전환 배치 시작 [{}]", LocalDateTime.now());
 
             JobParameters jobParameters = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
-                    .addLong("activeStatusId", activeId)
-                    .addLong("dormantStatusId", dormantId)
+                    .addString("baseDate", LocalDateTime.now().toString())
                     .toJobParameters();
 
             jobLauncher.run(dormantAccountJob, jobParameters);
 
-            log.debug("===== 휴면 계정 전환 배치 종료 =====");
+            log.info("<<<<< 휴면 계정 전환 배치 완료");
 
         } catch (Exception e) {
             log.error("휴면 계정 전환 배치 실패", e);
         }
-    }
-
-    private Long getStatusIdByName(String statusName) {
-        return jdbcTemplate
-                .queryForObject("SELECT status_id FROM Statuses WHERE status_name = ?", Long.class, statusName);
     }
 
 }

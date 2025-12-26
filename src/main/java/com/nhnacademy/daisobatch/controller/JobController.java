@@ -12,15 +12,17 @@
 
 package com.nhnacademy.daisobatch.controller;
 
+import java.time.LocalDateTime;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 public class JobController {
     /**
@@ -30,8 +32,6 @@ public class JobController {
 
     private final JobLauncher jobLauncher;
 
-    private final JdbcTemplate jdbcTemplate;
-
     private final Job birthdayCouponJob;
 
     private final Job dormantAccountJob;
@@ -39,11 +39,9 @@ public class JobController {
 //    private final Job gradeChangeJob;
 
     public JobController(JobLauncher jobLauncher,
-                         JdbcTemplate jdbcTemplate,
                          @Qualifier("birthdayCouponJob") Job birthdayCouponJob,
                          @Qualifier("dormantAccountJob") Job dormantAccountJob) {
         this.jobLauncher = jobLauncher;
-        this.jdbcTemplate = jdbcTemplate;
         this.birthdayCouponJob = birthdayCouponJob;
         this.dormantAccountJob = dormantAccountJob;
     }
@@ -65,15 +63,8 @@ public class JobController {
     @GetMapping("/batch/dormant")
     public String runDormantJob() {     // 휴면 계정 전환 배치 작업
         try {
-            Long activeId = jdbcTemplate
-                    .queryForObject("SELECT status_id FROM Statuses WHERE status_name = 'ACTIVE'", Long.class);
-            Long dormantId = jdbcTemplate
-                    .queryForObject("SELECT status_id FROM Statuses WHERE status_name = 'DORMANT'", Long.class);
-
             JobParameters jobParameters = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
-                    .addLong("activeStatusId", activeId)
-                    .addLong("dormantStatusId", dormantId)
+                    .addString("baseDate", LocalDateTime.now().toString())
                     .toJobParameters();
 
             jobLauncher.run(dormantAccountJob, jobParameters);
@@ -81,6 +72,7 @@ public class JobController {
             return "휴면 계정 전환 배치 작업 완료";
 
         } catch (Exception e) {
+            log.error("휴면 계정 전환 배치 실패", e);
             return "배치 실행 실패: " + e.getMessage();
         }
     }

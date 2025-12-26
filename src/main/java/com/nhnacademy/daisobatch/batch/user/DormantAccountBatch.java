@@ -50,10 +50,10 @@ public class DormantAccountBatch {
     private final PlatformTransactionManager platformTransactionManager;
     private final DataSource dataSource;
 
-    @Value("${batch.dormant.chunk-size}")
+    @Value("${batch.dormant.chunk-size:1000}")
     private int chunkSize;
 
-    @Value("${batch.dormant.days}")
+    @Value("${batch.dormant.days:90}")
     private int days;
 
     @Bean
@@ -70,7 +70,7 @@ public class DormantAccountBatch {
         return new StepBuilder("dormantAccountStep", jobRepository)
                 .<DormantAccountDto, DormantAccountDto>chunk(chunkSize, platformTransactionManager)
                 .reader(dormantAccountReader)   // 휴면 대상 계정 조회
-                .writer(dormantAccountWriter)  // 상태 변경 + 이력 저장
+                .writer(dormantAccountWriter)   // 상태 변경 + 이력 저장
                 .faultTolerant()        // 결함 허용: 일부 데이터 오류 발생 시에도 Step 중단 방지
                 .skip(Exception.class)  // 모든 예외에 대해 스킵 허용
                 .skipLimit(100)         // 최대 100건까지 오류 허용
@@ -81,13 +81,13 @@ public class DormantAccountBatch {
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
     public JdbcPagingItemReader<DormantAccountDto> dormantAccountReader(
-            @Value("#{jobParameters['activeStatusId']}") Long activeStatusId) {
+            @Value("#{jobParameters['baseDate']}") String baseDateStr) {
+        LocalDateTime baseDate = (baseDateStr != null) ? LocalDateTime.parse(baseDateStr) : LocalDateTime.now();
+
         Map<String, Object> parameters = new HashMap<>();
-        parameters.put("lastLoginAtBefore", LocalDateTime.now().minusDays(days)); // 90일 전
-        parameters.put("activeStatusId", activeStatusId);                       // ACTIVE 상태 ID
+        parameters.put("lastLoginAtBefore", baseDate.minusDays(days));
 
         return new JdbcPagingItemReaderBuilder<DormantAccountDto>()
-                // 로그인 날짜 기준 + 현재 상태가 ACTIVE인 계정
                 .dataSource(dataSource)
                 .queryProvider(dormantQueryProvider())  // 페이징 쿼리 제공
                 .parameterValues(parameters)
@@ -111,7 +111,10 @@ public class DormantAccountBatch {
 
         factoryBean.setSelectClause("SELECT login_id, last_login_at");
         factoryBean.setFromClause("FROM Accounts");
-        factoryBean.setWhereClause("WHERE current_status_id = :activeStatusId And last_login_at < :lastLoginAtBefore");
+        factoryBean.setWhereClause(
+                "WHERE current_status_id = (" +
+                        "SELECT status_id FROM Statuses WHERE status_name = 'ACTIVE'" +
+                        ") AND last_login_at < :lastLoginAtBefore");
         factoryBean.setSortKeys(sortKeys);
 
         try {
@@ -137,18 +140,13 @@ public class DormantAccountBatch {
 
     @Bean
     @StepScope
-    public JdbcBatchItemWriter<DormantAccountDto> updateAccountStatusWriter(
-            @Value("#{jobParameters['dormantStatusId']}") Long dormantStatusId) {
+    public JdbcBatchItemWriter<DormantAccountDto> updateAccountStatusWriter() {
         return new JdbcBatchItemWriterBuilder<DormantAccountDto>()
                 .dataSource(dataSource)
-                .sql("UPDATE Accounts SET current_status_id = :statusId WHERE login_id = :loginId")
-                .itemSqlParameterSourceProvider(item -> {
-                    Map<String, Object> params = new HashMap<>();
-                    params.put("statusId", dormantStatusId);    // 휴면 상태 ID
-                    params.put("loginId", item.loginId());      // 계정 로그인 ID
-
-                    return new MapSqlParameterSource(params);
-                })
+                .sql("UPDATE Accounts SET current_status_id = (" +
+                        "SELECT status_id FROM Statuses WHERE status_name = 'DORMANT'" +
+                        ") WHERE login_id = :loginId")
+                .beanMapped()
                 .assertUpdates(true)    // 업데이트 대상 없으면 예외 발생
                 .build();
     }
@@ -156,15 +154,19 @@ public class DormantAccountBatch {
     @Bean
     @StepScope
     public JdbcBatchItemWriter<DormantAccountDto> insertStatusHistoryWriter(
-            @Value("#{jobParameters['dormantStatusId']}") Long dormantStatusId) {
+            @Value("#{jobParameters['baseDate']}") String baseDateStr) {
+        LocalDateTime baseDate = (baseDateStr != null)
+                ? LocalDateTime.parse(baseDateStr)
+                : LocalDateTime.now();
+
         return new JdbcBatchItemWriterBuilder<DormantAccountDto>()
                 .dataSource(dataSource)
-                .sql("INSERT INTO AccountStatusHistories (login_id, status_id, changed_at) VALUES (:loginId, :statusId, :changedAt)")
+                .sql("INSERT INTO AccountStatusHistories (login_id, status_id, changed_at) " +
+                        "VALUES (:loginId, (SELECT status_id FROM Statuses WHERE status_name = 'DORMANT'), :changedAt)")
                 .itemSqlParameterSourceProvider(item -> {
                     Map<String, Object> params = new HashMap<>();
-                    params.put("loginId", item.loginId());          // 계정 로그인 ID
-                    params.put("statusId", dormantStatusId);        // 휴면 상태 ID
-                    params.put("changedAt", LocalDateTime.now());   // 상태 변경 시간
+                    params.put("loginId", item.loginId());  // 계정 로그인 ID
+                    params.put("changedAt", baseDate);      // 상태 변경 시간
 
                     return new MapSqlParameterSource(params);
                 })

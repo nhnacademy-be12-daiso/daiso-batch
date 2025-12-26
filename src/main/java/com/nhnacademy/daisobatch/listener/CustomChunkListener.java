@@ -19,22 +19,19 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 @Slf4j
 public class CustomChunkListener implements ChunkListener {
 
-    private int count;
-
     @Override
     public void beforeChunk(ChunkContext context) {
-        count++;
-        log.debug("before chunk: {}", count);
+        log.debug("before chunk: {}", context.getStepContext().getStepExecution().getReadCount());
     }
 
     @Override
     public void afterChunk(ChunkContext context) {
-        log.debug("after chunk: {}", count);
+        log.debug("after chunk success");
     }
 
     @Override
     public void afterChunkError(ChunkContext context) {
-        log.error("error chunk: {}", count);
+        log.error("after chunk error");
     }
 
 }
