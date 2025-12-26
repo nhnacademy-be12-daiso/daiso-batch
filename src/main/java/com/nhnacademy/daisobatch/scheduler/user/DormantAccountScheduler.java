@@ -12,8 +12,6 @@
 
 package com.nhnacademy.daisobatch.scheduler.user;
 
-import com.nhnacademy.daisobatch.exception.StateNotFoundException;
-import com.nhnacademy.daisobatch.repository.user.StatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -21,6 +19,7 @@ import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -30,11 +29,10 @@ import org.springframework.stereotype.Component;
 public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케줄러
 
     private final JobLauncher jobLauncher;
-
     private final Job dormantAccountJob;
+    private final JdbcTemplate jdbcTemplate;
 
-    private final StatusRepository statusRepository;
-
+    private static final String ACTIVE_STATUS = "ACTIVE";
     private static final String DORMANT_STATUS = "DORMANT";
 
     //  Cron 표현식 설명 (cron = "초 분 시 일 월 요일 년")
@@ -53,13 +51,15 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
     public void runDormantAccountJob() {
         try {
             // 실행 시점에 안전하게 상태 ID 조회
-            Long statusId = getDormantStatusId();
+            Long activeId = getStatusIdByName(ACTIVE_STATUS);
+            Long dormantId = getStatusIdByName(DORMANT_STATUS);
 
             log.debug("===== 휴면 계정 전환 배치 시작 =====");
 
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("time", System.currentTimeMillis())
-                    .addLong("dormantStatusId", statusId)
+                    .addLong("activeStatusId", activeId)
+                    .addLong("dormantStatusId", dormantId)
                     .toJobParameters();
 
             jobLauncher.run(dormantAccountJob, jobParameters);
@@ -71,12 +71,9 @@ public class DormantAccountScheduler {    // 휴면 계정 자동 전환 스케�
         }
     }
 
-    public Long getDormantStatusId() {
-        return statusRepository.findByStatusName(DORMANT_STATUS)
-                .orElseThrow(() -> {
-                    log.error("[DormantAccountScheduler] getDormantStatusId 실패: 존재하지 않는 상태 ({})", DORMANT_STATUS);
-                    return new StateNotFoundException("존재하지 않는 상태");
-                }).getStatusId();
+    private Long getStatusIdByName(String statusName) {
+        return jdbcTemplate
+                .queryForObject("SELECT status_id FROM Statuses WHERE status_name = ?", Long.class, statusName);
     }
 
 }

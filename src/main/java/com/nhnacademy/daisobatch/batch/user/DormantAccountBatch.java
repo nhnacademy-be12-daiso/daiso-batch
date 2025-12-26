@@ -12,15 +12,14 @@
 
 package com.nhnacademy.daisobatch.batch.user;
 
-import com.nhnacademy.daisobatch.entity.user.Account;
+import com.nhnacademy.daisobatch.dto.user.DormantAccountDto;
 import com.nhnacademy.daisobatch.listener.CustomChunkListener;
-import jakarta.persistence.EntityManagerFactory;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobScope;
@@ -29,9 +28,14 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
-import org.springframework.batch.item.database.JpaPagingItemReader;
+import org.springframework.batch.item.database.JdbcPagingItemReader;
+import org.springframework.batch.item.database.Order;
+import org.springframework.batch.item.database.PagingQueryProvider;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
-import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
+import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
+import org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean;
+import org.springframework.batch.item.support.CompositeItemWriter;
+import org.springframework.batch.item.support.builder.CompositeItemWriterBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,17 +43,12 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @RequiredArgsConstructor
-@Slf4j
 @Configuration
 public class DormantAccountBatch {
 
     private final JobRepository jobRepository;
-
     private final PlatformTransactionManager platformTransactionManager;
-
-    private final EntityManagerFactory entityManagerFactory;    // JPA Reader
-
-    private final DataSource dataSource;                        // JDBC Writer
+    private final DataSource dataSource;
 
     private static final int CHUNK_SIZE = 1000;
 
@@ -62,59 +61,106 @@ public class DormantAccountBatch {
 
     @Bean
     @JobScope   // Job이 실행될 때 빈 생성, 끝나면 사라짐
-    public Step dormantAccountStep(@Value("#{jobParameters['dormantStatusId']}") Long dormantStatusId) {
+    public Step dormantAccountStep(JdbcPagingItemReader<DormantAccountDto> dormantAccountReader,
+                                   CompositeItemWriter<DormantAccountDto> dormantAccountWriter) {
         return new StepBuilder("dormantAccountStep", jobRepository)
-                .<Account, Account>chunk(CHUNK_SIZE, platformTransactionManager)
-                .reader(dormantAccountReader())
-                .writer(dormantAccountWriter(dormantStatusId))
-                .faultTolerant()
+                .<DormantAccountDto, DormantAccountDto>chunk(CHUNK_SIZE, platformTransactionManager)
+                .reader(dormantAccountReader)   // 휴면 대상 계정 조회
+                .writer(dormantAccountWriter)  // 상태 변경 + 이력 저장
+                .faultTolerant()        // 결함 허용: 일부 데이터 오류 발생 시에도 Step 중단 방지
                 .skip(Exception.class)  // 모든 예외에 대해 스킵 허용
-                .skipLimit(100)         // 최대 100건까지 에러 나도 배치 게속 진행
-                .listener(new CustomChunkListener())
+                .skipLimit(100)         // 최대 100건까지 오류 허용
+                .listener(new CustomChunkListener())    // Chunk 단위 성공/실패 로깅
                 .build();
     }
 
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
-    public JpaPagingItemReader<Account> dormantAccountReader() {
-        // 파라미터 설정 (지금으로부터 90일 전)
+    public JdbcPagingItemReader<DormantAccountDto> dormantAccountReader(
+            @Value("#{jobParameters['activeStatusId']}") Long activeStatusId) {
         Map<String, Object> parameters = new HashMap<>();
-        parameters.put("lastLoginAtBefore", LocalDateTime.now().minusDays(90));
+        parameters.put("lastLoginAtBefore", LocalDateTime.now().minusDays(90)); // 90일 전
+        parameters.put("activeStatusId", activeStatusId);                       // ACTIVE 상태 ID
 
-        return new JpaPagingItemReaderBuilder<Account>()
-                // 1. 각 계정의 가장 '최신' 상태 변경 이력의 ID를 찾습니다.
-                // 2. 위에서 찾은 ID로 실제 상태 정보를 조인합니다.
-                // 3. 조건 필터링: 로그인 날짜 기준 + 현재 상태가 ACTIVE인 계정
-
-                // 로그인 날짜로 검색할 때, 계정별 상태 이력 조인할 때 인덱스 필수!!
-                .queryString("SELECT a FROM Account a " +
-                        "JOIN AccountStatusHistory ash ON ash.account = a " +
-                        "WHERE a.lastLoginAt < :lastLoginAtBefore " +
-                        "AND ash.changedAt = (SELECT MAX(h.changedAt) FROM AccountStatusHistory h WHERE h.account = a) " +
-                        "AND ash.status.statusName = 'ACTIVE' " +
-                        "ORDER BY a.loginId ASC")   // 페이징 시 동일한 정렬이 보장되어야 페이지 경계에서 누락이나 중복이 발생하지 않음
+        return new JdbcPagingItemReaderBuilder<DormantAccountDto>()
+                // 로그인 날짜 기준 + 현재 상태가 ACTIVE인 계정
+                .dataSource(dataSource)
+                .queryProvider(dormantQueryProvider())  // 페이징 쿼리 제공
                 .parameterValues(parameters)
-                .pageSize(CHUNK_SIZE)
-                .entityManagerFactory(entityManagerFactory)
+                .pageSize(CHUNK_SIZE)   // 페이지 크기 = Chunk 크기
                 .name("dormantAccountReader")
-                .saveState(false)   // 페이징 꼬임 방지: 항상 0페이지부터 읽기 유도
+                .saveState(false)   // 페이징 꼬임 방지: 재시작 시 항상 0페이지부터 읽기
+                .rowMapper((rs, rowNum) -> new DormantAccountDto(   // 결과 > DTO 매핑
+                        rs.getString("login_id"),
+                        rs.getTimestamp("last_login_at").toLocalDateTime()
+                ))
                 .build();
     }
 
     @Bean
+    public PagingQueryProvider dormantQueryProvider() {
+        SqlPagingQueryProviderFactoryBean factoryBean = new SqlPagingQueryProviderFactoryBean();
+        factoryBean.setDataSource(dataSource);
+
+        Map<String, Order> sortKeys = new HashMap<>();
+        sortKeys.put("login_id", Order.ASCENDING);  // 페이징 안정성을 위한 정렬 키
+
+        factoryBean.setSelectClause("SELECT login_id, last_login_at");
+        factoryBean.setFromClause("FROM Accounts");
+        factoryBean.setWhereClause("WHERE current_status_id = :activeStatusId And last_login_at < :lastLoginAtBefore");
+        factoryBean.setSortKeys(sortKeys);
+
+        try {
+            return factoryBean.getObject();
+
+        } catch (Exception e) {
+            throw new RuntimeException("[DormantAccountBatch] Query Provider 생성 실패", e);
+        }
+    }
+
+    @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
-    public JdbcBatchItemWriter<Account> dormantAccountWriter(
+    public CompositeItemWriter<DormantAccountDto> dormantAccountWriter(
+            JdbcBatchItemWriter<DormantAccountDto> updateAccountStatusWriter,
+            JdbcBatchItemWriter<DormantAccountDto> insertStatusHistoryWriter) {
+        return new CompositeItemWriterBuilder<DormantAccountDto>()
+                .delegates(Arrays.asList(
+                        updateAccountStatusWriter, // Accounts 테이블 업데이트
+                        insertStatusHistoryWriter  // AccountStatusHistories 테이블 인서트
+                ))
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public JdbcBatchItemWriter<DormantAccountDto> updateAccountStatusWriter(
             @Value("#{jobParameters['dormantStatusId']}") Long dormantStatusId) {
-        return new JdbcBatchItemWriterBuilder<Account>()
+        return new JdbcBatchItemWriterBuilder<DormantAccountDto>()
+                .dataSource(dataSource)
+                .sql("UPDATE Accounts SET current_status_id = :statusId WHERE login_id = :loginId")
+                .itemSqlParameterSourceProvider(item -> {
+                    Map<String, Object> params = new HashMap<>();
+                    params.put("statusId", dormantStatusId);    // 휴면 상태 ID
+                    params.put("loginId", item.loginId());      // 계정 로그인 ID
+
+                    return new MapSqlParameterSource(params);
+                })
+                .assertUpdates(true)    // 업데이트 대상 없으면 예외 발생
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public JdbcBatchItemWriter<DormantAccountDto> insertStatusHistoryWriter(
+            @Value("#{jobParameters['dormantStatusId']}") Long dormantStatusId) {
+        return new JdbcBatchItemWriterBuilder<DormantAccountDto>()
                 .dataSource(dataSource)
                 .sql("INSERT INTO AccountStatusHistories (login_id, status_id, changed_at) VALUES (:loginId, :statusId, :changedAt)")
-                .itemSqlParameterSourceProvider(account -> {
-                    // 파라미터 매핑 (Entity -> SQL 파라미터)
+                .itemSqlParameterSourceProvider(item -> {
                     Map<String, Object> params = new HashMap<>();
-
-                    params.put("loginId", account.getLoginId());   // Accounts의 PK
-                    params.put("statusId", dormantStatusId);       // 위에서 조회한 휴면 상태 PK
-                    params.put("changedAt", LocalDateTime.now());  // 변경 일시
+                    params.put("loginId", item.loginId());          // 계정 로그인 ID
+                    params.put("statusId", dormantStatusId);        // 휴면 상태 ID
+                    params.put("changedAt", LocalDateTime.now());   // 상태 변경 시간
 
                     return new MapSqlParameterSource(params);
                 })

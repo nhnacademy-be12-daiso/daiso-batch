@@ -10,15 +10,10 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.repository.user;
+package com.nhnacademy.daisobatch.dto.user;
 
-import com.nhnacademy.daisobatch.entity.user.Status;
-import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
+import java.time.LocalDateTime;
 
-public interface StatusRepository extends JpaRepository<Status, Long> {
-
-    // StatusName으로 조회 (ACTIVE, DORMANT, WITHDRAWN, BANNED)
-    Optional<Status> findByStatusName(String statusName);
-
+public record DormantAccountDto(String loginId,
+                                LocalDateTime lastLoginAt) {
 }
