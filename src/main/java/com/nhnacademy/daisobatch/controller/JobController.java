@@ -28,7 +28,7 @@ public class JobController {
             JobLauncher jobLauncher,
             @Qualifier("birthdayCouponJobMSA") Job birthdayCouponJobMSA,
             @Qualifier("birthdayCouponJobDB") Job birthdayCouponJobDB,
-            @Qualifier("dormantAccountJob") Job dormantAccountJob,
+            @Qualifier("dormantAccountJob") Job dormantAccountJob
 //            @Qualifier("gradeChangeJob") Job gradeChangeJob
     ) {
         this.jobLauncher = jobLauncher;
