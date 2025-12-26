@@ -14,10 +14,14 @@ package com.nhnacademy.daisobatch.entity.user;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,5 +39,8 @@ public class Grade {    // 회원 등급 및 혜택 정보
 
     @Column(name = "grade_name", nullable = false, length = 10)
     private String gradeName;       // GENERAL, ROYAL, GOLD, PLATINUM
+
+    @OneToMany(mappedBy = "grade", fetch = FetchType.LAZY)
+    private List<User> users = new ArrayList<>();
 
 }
