@@ -12,7 +12,6 @@
 
 package com.nhnacademy.daisobatch.controller;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
@@ -22,7 +21,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RequiredArgsConstructor
 @RestController
 public class JobController {
     /**
@@ -34,13 +32,21 @@ public class JobController {
 
     private final JdbcTemplate jdbcTemplate;
 
-    @Qualifier("birthdayCouponJob")
     private final Job birthdayCouponJob;
 
-    @Qualifier("dormantAccountJob")
     private final Job dormantAccountJob;
 
 //    private final Job gradeChangeJob;
+
+    public JobController(JobLauncher jobLauncher,
+                         JdbcTemplate jdbcTemplate,
+                         @Qualifier("birthdayCouponJob") Job birthdayCouponJob,
+                         @Qualifier("dormantAccountJob") Job dormantAccountJob) {
+        this.jobLauncher = jobLauncher;
+        this.jdbcTemplate = jdbcTemplate;
+        this.birthdayCouponJob = birthdayCouponJob;
+        this.dormantAccountJob = dormantAccountJob;
+    }
 
     @GetMapping("/batch/birthday")
     public String runBirthdayJob() {    // 생일 쿠폰 배치 작업

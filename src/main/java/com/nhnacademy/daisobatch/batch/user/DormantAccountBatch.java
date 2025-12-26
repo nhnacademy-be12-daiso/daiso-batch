@@ -50,7 +50,11 @@ public class DormantAccountBatch {
     private final PlatformTransactionManager platformTransactionManager;
     private final DataSource dataSource;
 
-    private static final int CHUNK_SIZE = 1000;
+    @Value("${batch.dormant.chunk-size}")
+    private int chunkSize;
+
+    @Value("${batch.dormant.days}")
+    private int days;
 
     @Bean
     public Job dormantAccountJob(Step dormantAccountStep) {
@@ -64,7 +68,7 @@ public class DormantAccountBatch {
     public Step dormantAccountStep(JdbcPagingItemReader<DormantAccountDto> dormantAccountReader,
                                    CompositeItemWriter<DormantAccountDto> dormantAccountWriter) {
         return new StepBuilder("dormantAccountStep", jobRepository)
-                .<DormantAccountDto, DormantAccountDto>chunk(CHUNK_SIZE, platformTransactionManager)
+                .<DormantAccountDto, DormantAccountDto>chunk(chunkSize, platformTransactionManager)
                 .reader(dormantAccountReader)   // 휴면 대상 계정 조회
                 .writer(dormantAccountWriter)  // 상태 변경 + 이력 저장
                 .faultTolerant()        // 결함 허용: 일부 데이터 오류 발생 시에도 Step 중단 방지
@@ -79,7 +83,7 @@ public class DormantAccountBatch {
     public JdbcPagingItemReader<DormantAccountDto> dormantAccountReader(
             @Value("#{jobParameters['activeStatusId']}") Long activeStatusId) {
         Map<String, Object> parameters = new HashMap<>();
-        parameters.put("lastLoginAtBefore", LocalDateTime.now().minusDays(90)); // 90일 전
+        parameters.put("lastLoginAtBefore", LocalDateTime.now().minusDays(days)); // 90일 전
         parameters.put("activeStatusId", activeStatusId);                       // ACTIVE 상태 ID
 
         return new JdbcPagingItemReaderBuilder<DormantAccountDto>()
@@ -87,7 +91,7 @@ public class DormantAccountBatch {
                 .dataSource(dataSource)
                 .queryProvider(dormantQueryProvider())  // 페이징 쿼리 제공
                 .parameterValues(parameters)
-                .pageSize(CHUNK_SIZE)   // 페이지 크기 = Chunk 크기
+                .pageSize(chunkSize)   // 페이지 크기 = Chunk 크기
                 .name("dormantAccountReader")
                 .saveState(false)   // 페이징 꼬임 방지: 재시작 시 항상 0페이지부터 읽기
                 .rowMapper((rs, rowNum) -> new DormantAccountDto(   // 결과 > DTO 매핑
