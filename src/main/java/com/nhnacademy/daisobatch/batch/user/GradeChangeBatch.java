@@ -52,10 +52,10 @@ public class GradeChangeBatch {
     private final PlatformTransactionManager platformTransactionManager;
     private final DataSource dataSource;
 
-    @Value("${batch.dormant.chunk-size:1000}")
+    @Value("${batch.grade.chunk-size:1000}")
     private int chunkSize;
 
-    @Value("${batch.dormant.days:90}")
+    @Value("${batch.grade.days:90}")
     private int days;
 
     private static final long GRADE_GENERAL_THRESHOLD = 100_000L;

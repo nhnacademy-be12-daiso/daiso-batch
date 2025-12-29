@@ -48,3 +48,6 @@ batch:
   dormant:
     days: 90
     chunk-size: 1000
+  grade:
+    days: 90
+    chunk-size: 1000
