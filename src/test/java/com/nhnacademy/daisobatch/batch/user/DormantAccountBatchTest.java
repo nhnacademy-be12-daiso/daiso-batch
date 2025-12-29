@@ -38,7 +38,7 @@ import org.springframework.test.context.jdbc.Sql;
 @SpringBootTest
 @ActiveProfiles("test")
 @Sql(scripts = {
-        "/sql/user/schema.sql",
+        "/sql/user/dormant-schema.sql",
         "/sql/user/dormant-data.sql"
 })
 public class DormantAccountBatchTest {
