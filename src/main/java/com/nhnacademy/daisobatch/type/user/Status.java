@@ -10,28 +10,22 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.listener;
+package com.nhnacademy.daisobatch.type.user;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.batch.core.ChunkListener;
-import org.springframework.batch.core.scope.context.ChunkContext;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
-@Slf4j
-public class CustomChunkListener implements ChunkListener {
+@Getter
+@RequiredArgsConstructor
+public enum Status {
 
-    @Override
-    public void beforeChunk(ChunkContext context) {
-        log.debug("before chunk: {}", context.getStepContext().getStepExecution().getReadCount());
-    }
+    ACTIVE(1L, "ACTIVE"),
+    DORMANT(2L, "DORMANT"),
+    WITHDRAWN(3L, "WITHDRAWN"),
+    BANNED(4L, "BANNED");
 
-    @Override
-    public void afterChunk(ChunkContext context) {
-        log.debug("after chunk success");
-    }
+    private final Long id;
 
-    @Override
-    public void afterChunkError(ChunkContext context) {
-        log.error("after chunk error");
-    }
+    private final String name;
 
 }

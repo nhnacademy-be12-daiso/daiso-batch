@@ -28,3 +28,19 @@ spring:
 eureka:
   client:
     enabled: false  # 테스트 시 Eureka 비활성화
+
+batch:
+  dormant:
+    chunk-size: 1000
+    days: 90
+  grade:
+    chunk-size: 1000
+    days: 90
+    threshold:
+      royal: 100000
+      gold: 200000
+      platinum: 300000
+
+dooray:
+  hook:
+    url: https://nhnacademy.dooray.com/services/3204376758577275363/4233687017610331322/eSER5R8GTMeOQgYRoL05Xg

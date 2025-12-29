@@ -46,5 +46,16 @@ rabbitmq:
 
 batch:
   dormant:
-    days: 90
     chunk-size: 1000
+    days: 90
+  grade:
+    chunk-size: 1000
+    days: 90
+    threshold:
+      royal: 100000
+      gold: 200000
+      platinum: 300000
+
+dooray:
+  hook:
+    url: https://nhnacademy.dooray.com/services/3204376758577275363/4233687017610331322/eSER5R8GTMeOQgYRoL05Xg

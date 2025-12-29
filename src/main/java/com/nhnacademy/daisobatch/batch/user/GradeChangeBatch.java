@@ -14,7 +14,10 @@ package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.dto.user.GradeCalculationDto;
 import com.nhnacademy.daisobatch.dto.user.GradeChangeDto;
-import com.nhnacademy.daisobatch.listener.CustomChunkListener;
+import com.nhnacademy.daisobatch.listener.JobFailureNotificationListener;
+import com.nhnacademy.daisobatch.listener.user.GradeChunkListener;
+import com.nhnacademy.daisobatch.listener.user.GradeSkipListener;
+import com.nhnacademy.daisobatch.type.user.Grade;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -52,20 +55,28 @@ public class GradeChangeBatch {
     private final PlatformTransactionManager platformTransactionManager;
     private final DataSource dataSource;
 
-    @Value("${batch.dormant.chunk-size:1000}")
+    private final JobFailureNotificationListener jobFailureNotificationListener;
+
+    @Value("${batch.grade.chunk-size:1000}")
     private int chunkSize;
 
-    @Value("${batch.dormant.days:90}")
+    @Value("${batch.grade.days:90}")
     private int days;
 
-    private static final long GRADE_GENERAL_THRESHOLD = 100_000L;
-    private static final long GRADE_ROYAL_THRESHOLD = 200_000L;
-    private static final long GRADE_GOLD_THRESHOLD = 300_000L;
+    @Value("${batch.grade.threshold.royal:100000}")
+    private long gradeRoyalThreshold;
+
+    @Value("${batch.grade.threshold.gold:200000}")
+    private long gradeGoldThreshold;
+
+    @Value("${batch.grade.threshold.platinum:300000}")
+    private long gradePlatinumThreshold;
 
     @Bean
     public Job gradeChangeJob(Step gradeChangeStep) {
         return new JobBuilder("gradeChangeJob", jobRepository)
                 .start(gradeChangeStep)
+                .listener(jobFailureNotificationListener)
                 .build();
     }
 
@@ -82,7 +93,8 @@ public class GradeChangeBatch {
                 .faultTolerant()        // 결함 허용: 일부 데이터 오류 발생 시에도 Step 중단 방지
                 .skip(Exception.class)  // 모든 예외에 대해 스킵 허용
                 .skipLimit(100)         // 최대 100건까지 오류 허용
-                .listener(new CustomChunkListener())    // Chunk 단위 성공/실패 로깅
+                .listener(new GradeChunkListener())    // Chunk 단위 성공/실패 로깅
+                .listener(new GradeSkipListener())
                 .build();
     }
 
@@ -142,17 +154,17 @@ public class GradeChangeBatch {
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
     public ItemProcessor<GradeCalculationDto, GradeChangeDto> gradeChangeProcessor() {
-        return calc -> {
-            Long newGradeId = calculateNewGradeId(calc.netAmount());
+        return item -> {
+            Long newGradeId = calculateNewGradeId(item.netAmount());
 
             // 등급 변화가 없으면 skip
-            if (newGradeId.equals(calc.currentGradeId())) {
+            if (newGradeId.equals(item.currentGradeId())) {
                 return null;
             }
 
-            String reason = String.format("최근 3개월 순수 구매액 %d원 기준 등급 조정", calc.netAmount());
+            String reason = String.format("최근 3개월 순수 구매액 %d원 기준 등급 조정", item.netAmount());
 
-            return new GradeChangeDto(calc.userCreatedId(), newGradeId, reason);
+            return new GradeChangeDto(item.userCreatedId(), newGradeId, reason);
         };
     }
 
@@ -174,10 +186,8 @@ public class GradeChangeBatch {
     public JdbcBatchItemWriter<GradeChangeDto> updateUserGradeWriter() {
         return new JdbcBatchItemWriterBuilder<GradeChangeDto>()
                 .dataSource(dataSource)
-                .sql("UPDATE Users SET current_grade_id = :gradeId " +
-                        "WHERE user_created_id = :userCreatedId")
+                .sql("UPDATE Users SET current_grade_id = :gradeId WHERE user_created_id = :userCreatedId")
                 .beanMapped()
-                .assertUpdates(false)   // 만약 Reader가 읽은 후 Writer가 실행되기 직전에 사용자가 주문하여 순수금액이 변했을 때
                 .build();
     }
 
@@ -193,10 +203,10 @@ public class GradeChangeBatch {
                         "VALUES (:userCreatedId, :gradeId, :reason, :changedAt)")
                 .itemSqlParameterSourceProvider(item -> {
                     Map<String, Object> params = new HashMap<>();
-                    params.put("userCreatedId", item.userCreatedId());
-                    params.put("gradeId", item.gradeId());
-                    params.put("reason", item.reason());
-                    params.put("changedAt", baseDate);
+                    params.put("userCreatedId", item.userCreatedId());  // 회원 ID
+                    params.put("gradeId", item.gradeId());              // 등급 ID
+                    params.put("reason", item.reason());                // 등급 변경 사유
+                    params.put("changedAt", baseDate);                  // 등급 변경 시간
 
                     return new MapSqlParameterSource(params);
                 })
@@ -205,17 +215,17 @@ public class GradeChangeBatch {
 
     // 금액별 등급 ID 매핑
     private Long calculateNewGradeId(long amount) {
-        if (amount >= GRADE_GOLD_THRESHOLD) {
-            return 4L;  // PLATINUM
+        if (amount >= gradePlatinumThreshold) {
+            return Grade.PLATINUM.getId();
         }
-        if (amount >= GRADE_ROYAL_THRESHOLD) {
-            return 3L;  // GOLD
+        if (amount >= gradeGoldThreshold) {
+            return Grade.GOLD.getId();
         }
-        if (amount >= GRADE_GENERAL_THRESHOLD) {
-            return 2L;  // ROYAL
+        if (amount >= gradeRoyalThreshold) {
+            return Grade.ROYAL.getId();
         }
 
-        return 1L;  // GENERAL
+        return Grade.GENERAL.getId();
     }
 
 }

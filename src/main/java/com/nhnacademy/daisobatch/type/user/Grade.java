@@ -10,11 +10,22 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.dto.user;
+package com.nhnacademy.daisobatch.type.user;
 
-import java.time.LocalDateTime;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
-public record DormantAccountDto(String loginId,
-                                LocalDateTime lastLoginAt,
-                                Long currentStatusId) {
+@Getter
+@RequiredArgsConstructor
+public enum Grade {
+
+    GENERAL(1L, "GENERAL"),
+    ROYAL(2L, "ROYAL"),
+    GOLD(3L, "GOLD"),
+    PLATINUM(4L, "PLATINUM");
+
+    private final Long id;
+
+    private final String name;
+
 }
