@@ -36,14 +36,16 @@ public class JobController {
 
     private final Job dormantAccountJob;
 
-//    private final Job gradeChangeJob;
+    private final Job gradeChangeJob;
 
     public JobController(JobLauncher jobLauncher,
                          @Qualifier("birthdayCouponJob") Job birthdayCouponJob,
-                         @Qualifier("dormantAccountJob") Job dormantAccountJob) {
+                         @Qualifier("dormantAccountJob") Job dormantAccountJob,
+                         @Qualifier("gradeChangeJob") Job gradeChangeJob) {
         this.jobLauncher = jobLauncher;
         this.birthdayCouponJob = birthdayCouponJob;
         this.dormantAccountJob = dormantAccountJob;
+        this.gradeChangeJob = gradeChangeJob;
     }
 
     @GetMapping("/batch/birthday")
@@ -52,10 +54,13 @@ public class JobController {
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("runDate", System.currentTimeMillis()) // 중복 실행 가능하도록 시간 파라미터 추가
                     .toJobParameters();
+
             jobLauncher.run(birthdayCouponJob, jobParameters);
+
             return "생일 쿠폰 배치 실행 완료!";
+
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("생일 쿠폰 배치 실패", e);
             return "배치 실행 실패: " + e.getMessage();
         }
     }
@@ -77,20 +82,21 @@ public class JobController {
         }
     }
 
-//    @GetMapping("/batch/grade")
-//    public String runGradeJob() {   // 등급 변경 배치 작업
-//        try {
-//            JobParameters jobParameters = new JobParametersBuilder()
-//                    .addLong("time", System.currentTimeMillis())
-//                    .toJobParameters();
-//
-//            jobLauncher.run(gradeChangeJob, jobParameters);
-//
-//            return "등급 변경 배치 작업 완료";
-//
-//        } catch (Exception e) {
-//            return "배치 실행 실패: " + e.getMessage();
-//        }
-//    }
+    @GetMapping("/batch/grade")
+    public String runGradeJob() {   // 등급 변경 배치 작업
+        try {
+            JobParameters jobParameters = new JobParametersBuilder()
+                    .addString("baseDate", LocalDateTime.now().toString())
+                    .toJobParameters();
+
+            jobLauncher.run(gradeChangeJob, jobParameters);
+
+            return "등급 변경 배치 작업 완료";
+
+        } catch (Exception e) {
+            log.error("등급 변경 배치 실패", e);
+            return "배치 실행 실패: " + e.getMessage();
+        }
+    }
 
 }

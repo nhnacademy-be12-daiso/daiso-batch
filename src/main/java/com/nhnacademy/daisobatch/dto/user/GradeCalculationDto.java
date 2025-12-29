@@ -10,14 +10,9 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-//package com.nhnacademy.daisobatch.repository.user;
-//
-//import com.nhnacademy.daisobatch.entity.user.UserGradeHistory;
-//import org.springframework.data.jpa.repository.JpaRepository;
-//
-//public interface UserGradeHistoryRepository extends JpaRepository<UserGradeHistory, Long> {
-//
-//    // 회원의 현재 등급 ID 조회
-//    UserGradeHistory findTopByUser_UserCreatedIdOrderByChangedAtDesc(Long userCreatedId);
-//
-//}
+package com.nhnacademy.daisobatch.dto.user;
+
+public record GradeCalculationDto(Long userCreatedId,
+                                  Long currentGradeId,
+                                  Long netAmount) {
+}

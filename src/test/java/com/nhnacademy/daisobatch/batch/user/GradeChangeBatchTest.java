@@ -10,12 +10,7 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.type;
+package com.nhnacademy.daisobatch.batch.user;
 
-public enum OrderStatus {
-    PENDING,
-    IN_TRANSIT,
-    COMPLETED,
-    RETURN,
-    CANCEL
+public class GradeChangeBatchTest {
 }
