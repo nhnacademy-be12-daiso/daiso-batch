@@ -111,10 +111,9 @@ public class DormantAccountBatch {
 
         factoryBean.setSelectClause("SELECT login_id, last_login_at");
         factoryBean.setFromClause("FROM Accounts");
-        factoryBean.setWhereClause(
-                "WHERE current_status_id = (" +
-                        "SELECT status_id FROM Statuses WHERE status_name = 'ACTIVE'" +
-                        ") AND last_login_at < :lastLoginAtBefore");
+        factoryBean.setWhereClause("WHERE current_status_id = (" +
+                "SELECT status_id FROM Statuses WHERE status_name = 'ACTIVE') " +
+                "AND last_login_at < :lastLoginAtBefore");
         factoryBean.setSortKeys(sortKeys);
 
         try {
@@ -145,7 +144,7 @@ public class DormantAccountBatch {
                 .dataSource(dataSource)
                 .sql("UPDATE Accounts SET current_status_id = (" +
                         "SELECT status_id FROM Statuses WHERE status_name = 'DORMANT'" +
-                        ") WHERE login_id = :loginId")
+                        ") WHERE login_id = :loginId AND last_login_at = :lastLoginAt")
                 .beanMapped()
                 .assertUpdates(false)    // 만약 Reader가 읽은 후 Writer가 실행되기 직전에 사용자가 로그인하여 상태가 변했을 때
                 .build();
