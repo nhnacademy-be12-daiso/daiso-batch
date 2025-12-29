@@ -37,7 +37,6 @@ batch:
     chunk-size: 1000
     days: 90
     threshold:
-      general: 100000
-      royal: 200000
-      gold: 300000
-      platinum: 400000
+      royal: 100000
+      gold: 200000
+      platinum: 300000

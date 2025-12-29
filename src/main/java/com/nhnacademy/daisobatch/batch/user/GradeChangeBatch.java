@@ -59,17 +59,14 @@ public class GradeChangeBatch {
     @Value("${batch.grade.days:90}")
     private int days;
 
-    @Value("${batch.grade.threshold.general:100000}")
-    private long GRADE_GENERAL_THRESHOLD;
+    @Value("${batch.grade.threshold.royal:100000}")
+    private long gradeRoyalThreshold;
 
-    @Value("${batch.grade.threshold.royal:200000}")
-    private long GRADE_ROYAL_THRESHOLD;
+    @Value("${batch.grade.threshold.gold:200000}")
+    private long gradeGoldThreshold;
 
-    @Value("${batch.grade.threshold.gold:300000}")
-    private long GRADE_GOLD_THRESHOLD;
-
-    @Value("${batch.grade.threshold.platinum:400000}")
-    private long GRADE_PLATINUM_THRESHOLD;
+    @Value("${batch.grade.threshold.platinum:300000}")
+    private long gradePlatinumThreshold;
 
     @Bean
     public Job gradeChangeJob(Step gradeChangeStep) {
@@ -214,13 +211,13 @@ public class GradeChangeBatch {
 
     // 금액별 등급 ID 매핑
     private Long calculateNewGradeId(long amount) {
-        if (amount >= GRADE_GOLD_THRESHOLD) {
+        if (amount >= gradePlatinumThreshold) {
             return Grade.PLATINUM.getId();
         }
-        if (amount >= GRADE_ROYAL_THRESHOLD) {
+        if (amount >= gradeGoldThreshold) {
             return Grade.GOLD.getId();
         }
-        if (amount >= GRADE_GENERAL_THRESHOLD) {
+        if (amount >= gradeRoyalThreshold) {
             return Grade.ROYAL.getId();
         }
 
