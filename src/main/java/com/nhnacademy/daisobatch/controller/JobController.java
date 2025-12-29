@@ -1,3 +1,15 @@
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
 package com.nhnacademy.daisobatch.controller;
 
 import java.time.LocalDateTime;
@@ -10,32 +22,35 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
 @Slf4j
+@RestController
 public class JobController {
     /**
      * 테스트용 컨트롤러~~~!!!!!
      * 즉시 배치 작업 확인하고 싶을 때 이거 쓰기~~
      */
+
     private final JobLauncher jobLauncher;
 
     private final Job birthdayCouponJobMSA;
     private final Job birthdayCouponJobDB;
+
     private final Job dormantAccountJob;
-//    private final Job gradeChangeJob;
+
+    private final Job gradeChangeJob;
 
     public JobController(
             JobLauncher jobLauncher,
             @Qualifier("birthdayCouponJobMSA") Job birthdayCouponJobMSA,
             @Qualifier("birthdayCouponJobDB") Job birthdayCouponJobDB,
-            @Qualifier("dormantAccountJob") Job dormantAccountJob
-//            @Qualifier("gradeChangeJob") Job gradeChangeJob
+            @Qualifier("dormantAccountJob") Job dormantAccountJob,
+            @Qualifier("gradeChangeJob") Job gradeChangeJob
     ) {
         this.jobLauncher = jobLauncher;
         this.birthdayCouponJobMSA = birthdayCouponJobMSA;
         this.birthdayCouponJobDB = birthdayCouponJobDB;
         this.dormantAccountJob = dormantAccountJob;
-//        this.gradeChangeJob = gradeChangeJob;
+        this.gradeChangeJob = gradeChangeJob;
     }
 
     // 생일 쿠폰 - MSA
@@ -73,7 +88,7 @@ public class JobController {
             return String.format("생일 쿠폰(DB) 배치 완료! status=%s, time=%d초", exec.getStatus(), sec);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("생일 쿠폰(DB) 배치 실패", e);
             return "생일 쿠폰(DB) 배치 실패: " + e.getMessage();
         }
     }
@@ -95,20 +110,21 @@ public class JobController {
         }
     }
 
-//    @GetMapping("/batch/grade")
-//    public String runGradeJob() {   // 등급 변경 배치 작업
-//        try {
-//            JobParameters jobParameters = new JobParametersBuilder()
-//                    .addLong("time", System.currentTimeMillis())
-//                    .toJobParameters();
-//
-//            jobLauncher.run(gradeChangeJob, jobParameters);
-//
-//            return "등급 변경 배치 작업 완료";
-//
-//        } catch (Exception e) {
-//            return "배치 실행 실패: " + e.getMessage();
-//        }
-//    }
+    @GetMapping("/batch/grade")
+    public String runGradeJob() {   // 등급 변경 배치 작업
+        try {
+            JobParameters jobParameters = new JobParametersBuilder()
+                    .addString("baseDate", LocalDateTime.now().toString())
+                    .toJobParameters();
+
+            jobLauncher.run(gradeChangeJob, jobParameters);
+
+            return "등급 변경 배치 작업 완료";
+
+        } catch (Exception e) {
+            log.error("등급 변경 배치 실패", e);
+            return "배치 실행 실패: " + e.getMessage();
+        }
+    }
 
 }

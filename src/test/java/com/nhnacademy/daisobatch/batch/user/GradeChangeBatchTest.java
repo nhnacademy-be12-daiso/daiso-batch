@@ -12,7 +12,7 @@
 
 package com.nhnacademy.daisobatch.batch.user;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -38,28 +38,28 @@ import org.springframework.test.context.jdbc.Sql;
 @SpringBootTest
 @ActiveProfiles("test")
 @Sql(scripts = {
-        "/sql/user/dormant-schema.sql",
-        "/sql/user/dormant-data.sql"
+        "/sql/user/grade-schema.sql",
+        "/sql/user/grade-data.sql"
 })
-public class DormantAccountBatchTest {
+public class GradeChangeBatchTest {
 
     @Autowired
     private JobLauncherTestUtils jobLauncherTestUtils;
 
     @Autowired
-    @Qualifier("dormantAccountJob")
-    private Job dormantAccountJob;
+    @Qualifier("gradeChangeJob")
+    private Job gradeChangeJob;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void setUp() {
-        jobLauncherTestUtils.setJob(dormantAccountJob);
+        jobLauncherTestUtils.setJob(gradeChangeJob);
     }
 
     @Test
-    @DisplayName("휴면 전환 배치 실행 시, 대상자는 DORMANT로 변경되고 비대상자는 ACTIVE를 유지해야 함")
+    @DisplayName("등급 산정 배치 실행 시, 구매 금액에 따라 등급이 변경되고 이력이 저장되어야 함")
     void test1() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         String baseDateStr = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
@@ -72,31 +72,26 @@ public class DormantAccountBatchTest {
 
         assertThat(jobExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 
-        // Accounts 테이블의 현재 상태가 DORMANT(2)인지 확인
-        Map<String, Object> targetAccount = jdbcTemplate.queryForMap(
-                "SELECT current_status_id FROM Accounts WHERE login_id = 'targetUser'");
-        assertThat(targetAccount.get("current_status_id")).isEqualTo(2L);
+        // 15만원 구매자가 ROYAL(2)인지 확인
+        Long royalUserGrade = jdbcTemplate.queryForObject(
+                "SELECT current_grade_id FROM Users WHERE user_created_id = 10", Long.class);
+        assertThat(royalUserGrade).isEqualTo(2L);
 
-        // AccountStatusHistories에 이력이 추가되었는지 확인 (총 2건: 초기 ACTIVE + 신규 DORMANT)
-        Integer targetHistoryCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM AccountStatusHistories WHERE login_id = 'targetUser'", Integer.class);
-        assertThat(targetHistoryCount).isEqualTo(2);
+        // 35만원 구매자가 PLATINUM(4)인지 확인
+        Long platinumUserGrade = jdbcTemplate.queryForObject(
+                "SELECT current_grade_id FROM Users WHERE user_created_id = 20", Long.class);
+        assertThat(platinumUserGrade).isEqualTo(4L);
 
-        // 가장 최근 이력의 상태와 변경 시간이 baseDate와 일치하는지 확인
-        Map<String, Object> latestHistory = jdbcTemplate.queryForMap(
-                "SELECT status_id, changed_at FROM AccountStatusHistories WHERE login_id = 'targetUser' ORDER BY changed_at DESC LIMIT 1");
-        assertThat(latestHistory.get("status_id")).isEqualTo(2L);
-        assertThat(latestHistory.get("changed_at").toString()).contains(now.toLocalDate().toString());
+        // PENDING 상태 주문은 GENERAL(1)을 유지하는지 확인
+        Long pendingUserGrade = jdbcTemplate.queryForObject(
+                "SELECT current_grade_id FROM Users WHERE user_created_id = 30", Long.class);
+        assertThat(pendingUserGrade).isEqualTo(1L);
 
-        // Accounts 테이블의 현재 상태가 ACTIVE(1)를 유지하는지 확인
-        Map<String, Object> activeAccount = jdbcTemplate.queryForMap(
-                "SELECT current_status_id FROM Accounts WHERE login_id = 'activeUser'");
-        assertThat(activeAccount.get("current_status_id")).isEqualTo(1L);
-
-        // 이력이 추가되지 않았는지 확인 (초기 1건 유지)
-        Integer activeHistoryCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM AccountStatusHistories WHERE login_id = 'activeUser'", Integer.class);
-        assertThat(activeHistoryCount).isEqualTo(1);
+        // 이력 저장 확인
+        Map<String, Object> history = jdbcTemplate.queryForMap(
+                "SELECT grade_id, reason FROM UserGradeHistories WHERE user_created_id = 10");
+        assertThat(history.get("grade_id")).isEqualTo(2L);
+        assertThat(history.get("reason").toString()).contains("150000원");
     }
 
 }

@@ -10,24 +10,22 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
--- 기존 테이블 삭제 (선택 사항)
-DROP TABLE IF EXISTS AccountStatusHistories;
-DROP TABLE IF EXISTS Accounts;
-DROP TABLE IF EXISTS Users;
-DROP TABLE IF EXISTS Statuses;
+SET REFERENTIAL_INTEGRITY FALSE;
 
--- Statuses 테이블
+DROP TABLE IF EXISTS AccountStatusHistories CASCADE;
+DROP TABLE IF EXISTS Accounts CASCADE;
+DROP TABLE IF EXISTS Users CASCADE;
+DROP TABLE IF EXISTS Statuses CASCADE;
+
 CREATE TABLE Statuses (
     status_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
     status_name VARCHAR(10) NOT NULL
 );
 
--- Users 테이블
 CREATE TABLE Users (
     user_created_id BIGINT AUTO_INCREMENT PRIMARY KEY
 );
 
--- Accounts 테이블
 CREATE TABLE Accounts (
     login_id           VARCHAR(50) PRIMARY KEY,
     user_created_id    BIGINT NOT NULL,
@@ -37,12 +35,13 @@ CREATE TABLE Accounts (
     FOREIGN KEY (current_status_id) REFERENCES Statuses(status_id)
 );
 
--- AccountStatusHistories 테이블
 CREATE TABLE AccountStatusHistories (
     account_status_history_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    login_id   VARCHAR(50) NOT NULL,
-    status_id  BIGINT NOT NULL,
-    changed_at TIMESTAMP NOT NULL,
+    login_id                  VARCHAR(50) NOT NULL,
+    status_id                 BIGINT NOT NULL,
+    changed_at                TIMESTAMP NOT NULL,
     FOREIGN KEY (login_id) REFERENCES Accounts(login_id),
     FOREIGN KEY (status_id) REFERENCES Statuses(status_id)
 );
+
+SET REFERENTIAL_INTEGRITY TRUE;
