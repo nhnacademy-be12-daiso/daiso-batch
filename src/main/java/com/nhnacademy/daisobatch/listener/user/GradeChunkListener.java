@@ -10,19 +10,24 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.listener;
+package com.nhnacademy.daisobatch.listener.user;
 
-import com.nhnacademy.daisobatch.dto.user.GradeCalculationDto;
-import com.nhnacademy.daisobatch.dto.user.GradeChangeDto;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.batch.core.SkipListener;
+import org.springframework.batch.core.ChunkListener;
+import org.springframework.batch.core.scope.context.ChunkContext;
 
 @Slf4j
-public class CustomSkipListener implements SkipListener<GradeCalculationDto, GradeChangeDto> {
+public class GradeChunkListener implements ChunkListener {
 
     @Override
-    public void onSkipInProcess(GradeCalculationDto item, Throwable t) {
-        log.error("등급 산정 중 에러 발생 - user_created_id: {}, Error: {}", item.userCreatedId(), t.getMessage());
+    public void beforeChunk(ChunkContext context) {
+        log.debug("[GradeChunkListener] 청크 시작 - {}", context.getStepContext().getStepName());
+    }
+
+    @Override
+    public void afterChunkError(ChunkContext context) {
+        // SkipListener가 상세 내용을 잡고 여기서는 덩어리 실패 사실만 알려줌
+        log.error("[GradeChunkListener] 청크 롤백 발생 - 해당 범위 데이터 재시도 혹은 확인 필요");
     }
 
 }

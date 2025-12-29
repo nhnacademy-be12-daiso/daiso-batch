@@ -13,7 +13,8 @@
 package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.dto.user.DormantAccountDto;
-import com.nhnacademy.daisobatch.listener.CustomChunkListener;
+import com.nhnacademy.daisobatch.listener.user.DormantChunkListener;
+import com.nhnacademy.daisobatch.listener.user.DormantSkipListener;
 import com.nhnacademy.daisobatch.type.user.Status;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -78,7 +79,8 @@ public class DormantAccountBatch {
                 .faultTolerant()        // 결함 허용: 일부 데이터 오류 발생 시에도 Step 중단 방지
                 .skip(Exception.class)  // 모든 예외에 대해 스킵 허용
                 .skipLimit(100)         // 최대 100건까지 오류 허용
-                .listener(new CustomChunkListener())    // Chunk 단위 성공/실패 로깅
+                .listener(new DormantChunkListener())    // Chunk 단위 성공/실패 로깅
+                .listener(new DormantSkipListener())
                 .build();
     }
 
@@ -131,8 +133,8 @@ public class DormantAccountBatch {
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
     public ItemProcessor<DormantAccountDto, DormantAccountDto> dormantAccountProcessor() {
         return item -> {
-            // 현재 상태가 ACTIVE라면 skip
-            if (item.currentStatusId().equals(Status.ACTIVE.getId())) {
+            // 현재 상태가 ACTIVE가 아니라면 skip
+            if (!item.currentStatusId().equals(Status.ACTIVE.getId())) {
                 return null;
             }
 

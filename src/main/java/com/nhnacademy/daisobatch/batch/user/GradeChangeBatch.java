@@ -14,7 +14,8 @@ package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.dto.user.GradeCalculationDto;
 import com.nhnacademy.daisobatch.dto.user.GradeChangeDto;
-import com.nhnacademy.daisobatch.listener.CustomChunkListener;
+import com.nhnacademy.daisobatch.listener.user.GradeChunkListener;
+import com.nhnacademy.daisobatch.listener.user.GradeSkipListener;
 import com.nhnacademy.daisobatch.type.user.Grade;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -88,7 +89,8 @@ public class GradeChangeBatch {
                 .faultTolerant()        // 결함 허용: 일부 데이터 오류 발생 시에도 Step 중단 방지
                 .skip(Exception.class)  // 모든 예외에 대해 스킵 허용
                 .skipLimit(100)         // 최대 100건까지 오류 허용
-                .listener(new CustomChunkListener())    // Chunk 단위 성공/실패 로깅
+                .listener(new GradeChunkListener())    // Chunk 단위 성공/실패 로깅
+                .listener(new GradeSkipListener())
                 .build();
     }
 
