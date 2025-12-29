@@ -15,6 +15,7 @@ package com.nhnacademy.daisobatch.batch.user;
 import com.nhnacademy.daisobatch.dto.user.GradeCalculationDto;
 import com.nhnacademy.daisobatch.dto.user.GradeChangeDto;
 import com.nhnacademy.daisobatch.listener.CustomChunkListener;
+import com.nhnacademy.daisobatch.type.user.Grade;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -58,9 +59,17 @@ public class GradeChangeBatch {
     @Value("${batch.grade.days:90}")
     private int days;
 
-    private static final long GRADE_GENERAL_THRESHOLD = 100_000L;
-    private static final long GRADE_ROYAL_THRESHOLD = 200_000L;
-    private static final long GRADE_GOLD_THRESHOLD = 300_000L;
+    @Value("${batch.grade.threshold.general:100000}")
+    private long GRADE_GENERAL_THRESHOLD;
+
+    @Value("${batch.grade.threshold.royal:200000}")
+    private long GRADE_ROYAL_THRESHOLD;
+
+    @Value("${batch.grade.threshold.gold:300000}")
+    private long GRADE_GOLD_THRESHOLD;
+
+    @Value("${batch.grade.threshold.platinum:400000}")
+    private long GRADE_PLATINUM_THRESHOLD;
 
     @Bean
     public Job gradeChangeJob(Step gradeChangeStep) {
@@ -206,16 +215,16 @@ public class GradeChangeBatch {
     // 금액별 등급 ID 매핑
     private Long calculateNewGradeId(long amount) {
         if (amount >= GRADE_GOLD_THRESHOLD) {
-            return 4L;  // PLATINUM
+            return Grade.PLATINUM.getId();
         }
         if (amount >= GRADE_ROYAL_THRESHOLD) {
-            return 3L;  // GOLD
+            return Grade.GOLD.getId();
         }
         if (amount >= GRADE_GENERAL_THRESHOLD) {
-            return 2L;  // ROYAL
+            return Grade.ROYAL.getId();
         }
 
-        return 1L;  // GENERAL
+        return Grade.GENERAL.getId();
     }
 
 }

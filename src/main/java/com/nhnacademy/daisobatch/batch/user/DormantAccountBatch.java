@@ -14,6 +14,7 @@ package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.dto.user.DormantAccountDto;
 import com.nhnacademy.daisobatch.listener.CustomChunkListener;
+import com.nhnacademy.daisobatch.type.user.Status;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -131,7 +132,7 @@ public class DormantAccountBatch {
     public ItemProcessor<DormantAccountDto, DormantAccountDto> dormantAccountProcessor() {
         return item -> {
             // 현재 상태가 ACTIVE라면 skip
-            if (item.currentStatusId() != 1L) {
+            if (item.currentStatusId().equals(Status.ACTIVE.getId())) {
                 return null;
             }
 

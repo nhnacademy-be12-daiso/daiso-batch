@@ -28,3 +28,16 @@ spring:
 eureka:
   client:
     enabled: false  # 테스트 시 Eureka 비활성화
+
+batch:
+  dormant:
+    chunk-size: 1000
+    days: 90
+  grade:
+    chunk-size: 1000
+    days: 90
+    threshold:
+      general: 100000
+      royal: 200000
+      gold: 300000
+      platinum: 400000

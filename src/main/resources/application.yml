@@ -46,8 +46,13 @@ rabbitmq:
 
 batch:
   dormant:
-    days: 90
     chunk-size: 1000
+    days: 90
   grade:
-    days: 90
     chunk-size: 1000
+    days: 90
+    threshold:
+      general: 100000
+      royal: 200000
+      gold: 300000
+      platinum: 400000
