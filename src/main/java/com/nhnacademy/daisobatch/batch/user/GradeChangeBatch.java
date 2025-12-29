@@ -14,6 +14,7 @@ package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.dto.user.GradeCalculationDto;
 import com.nhnacademy.daisobatch.dto.user.GradeChangeDto;
+import com.nhnacademy.daisobatch.listener.JobFailureNotificationListener;
 import com.nhnacademy.daisobatch.listener.user.GradeChunkListener;
 import com.nhnacademy.daisobatch.listener.user.GradeSkipListener;
 import com.nhnacademy.daisobatch.type.user.Grade;
@@ -54,6 +55,8 @@ public class GradeChangeBatch {
     private final PlatformTransactionManager platformTransactionManager;
     private final DataSource dataSource;
 
+    private final JobFailureNotificationListener jobFailureNotificationListener;
+
     @Value("${batch.grade.chunk-size:1000}")
     private int chunkSize;
 
@@ -73,6 +76,7 @@ public class GradeChangeBatch {
     public Job gradeChangeJob(Step gradeChangeStep) {
         return new JobBuilder("gradeChangeJob", jobRepository)
                 .start(gradeChangeStep)
+                .listener(jobFailureNotificationListener)
                 .build();
     }
 
@@ -182,8 +186,7 @@ public class GradeChangeBatch {
     public JdbcBatchItemWriter<GradeChangeDto> updateUserGradeWriter() {
         return new JdbcBatchItemWriterBuilder<GradeChangeDto>()
                 .dataSource(dataSource)
-                .sql("UPDATE Users SET current_grade_id = :gradeId " +
-                        "WHERE user_created_id = :userCreatedId AND current_grade_id = :currentGradeId")
+                .sql("UPDATE Users SET current_grade_id = :gradeId WHERE user_created_id = :userCreatedId")
                 .beanMapped()
                 .build();
     }

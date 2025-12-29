@@ -13,6 +13,7 @@
 package com.nhnacademy.daisobatch.batch.user;
 
 import com.nhnacademy.daisobatch.dto.user.DormantAccountDto;
+import com.nhnacademy.daisobatch.listener.JobFailureNotificationListener;
 import com.nhnacademy.daisobatch.listener.user.DormantChunkListener;
 import com.nhnacademy.daisobatch.listener.user.DormantSkipListener;
 import com.nhnacademy.daisobatch.type.user.Status;
@@ -53,6 +54,8 @@ public class DormantAccountBatch {
     private final PlatformTransactionManager platformTransactionManager;
     private final DataSource dataSource;
 
+    private final JobFailureNotificationListener jobFailureNotificationListener;
+
     @Value("${batch.dormant.chunk-size:1000}")
     private int chunkSize;
 
@@ -63,6 +66,7 @@ public class DormantAccountBatch {
     public Job dormantAccountJob(Step dormantAccountStep) {
         return new JobBuilder("dormantAccountJob", jobRepository)
                 .start(dormantAccountStep)
+                .listener(jobFailureNotificationListener)
                 .build();
     }
 
