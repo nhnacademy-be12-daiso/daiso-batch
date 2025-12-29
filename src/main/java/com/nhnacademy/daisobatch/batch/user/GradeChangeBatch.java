@@ -124,12 +124,10 @@ public class GradeChangeBatch {
                 "COALESCE(SUM(od.price), 0) as net_amount");
         factoryBean.setFromClause("FROM Users u " +
                 "JOIN Accounts a ON u.user_created_id = a.user_created_id " +
-                "JOIN Orders o ON u.user_created_id = o.user_created_id " +
-                "JOIN OrderDetails od ON o.order_id = od.order_id");
+                "LEFT JOIN Orders o ON u.user_created_id = o.user_created_id AND o.order_date >= :threeMonthsAgo " +
+                "LEFT JOIN OrderDetails od ON o.order_id = od.order_id AND od.order_detail_status = 'COMPLETED'");
         factoryBean.setWhereClause("WHERE a.current_status_id = (" +
-                "SELECT status_id FROM Statuses WHERE status_name = 'ACTIVE'" +
-                ") AND od.order_detail_status = 'COMPLETED' " +
-                "AND o.order_date >= :threeMonthsAgo");
+                "SELECT status_id FROM Statuses WHERE status_name = 'ACTIVE')");
         factoryBean.setGroupClause("GROUP BY u.user_created_id, u.current_grade_id");
         factoryBean.setSortKeys(sortKeys);
 
