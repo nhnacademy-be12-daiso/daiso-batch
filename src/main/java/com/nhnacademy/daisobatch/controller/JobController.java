@@ -1,3 +1,15 @@
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
 package com.nhnacademy.daisobatch.controller;
 
 import java.time.LocalDateTime;
@@ -31,7 +43,7 @@ public class JobController {
             JobLauncher jobLauncher,
             @Qualifier("birthdayCouponJobMSA") Job birthdayCouponJobMSA,
             @Qualifier("birthdayCouponJobDB") Job birthdayCouponJobDB,
-            @Qualifier("dormantAccountJob") Job dormantAccountJob
+            @Qualifier("dormantAccountJob") Job dormantAccountJob,
             @Qualifier("gradeChangeJob") Job gradeChangeJob
     ) {
         this.jobLauncher = jobLauncher;
@@ -76,7 +88,7 @@ public class JobController {
             return String.format("생일 쿠폰(DB) 배치 완료! status=%s, time=%d초", exec.getStatus(), sec);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("생일 쿠폰(DB) 배치 실패", e);
             return "생일 쿠폰(DB) 배치 실패: " + e.getMessage();
         }
     }
