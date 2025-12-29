@@ -116,6 +116,7 @@ public class DormantAccountBatch {
         Map<String, Order> sortKeys = new HashMap<>();
         sortKeys.put("login_id", Order.ASCENDING);  // 페이징 안정성을 위한 정렬 키
 
+        // 90일 전에 로그인한 계정만 조회
         factoryBean.setSelectClause("SELECT login_id, last_login_at, current_status_id");
         factoryBean.setFromClause("FROM Accounts");
         factoryBean.setWhereClause("WHERE last_login_at < :lastLoginAtBefore");
@@ -164,7 +165,6 @@ public class DormantAccountBatch {
                         "SELECT status_id FROM Statuses WHERE status_name = 'DORMANT'" +
                         ") WHERE login_id = :loginId AND last_login_at = :lastLoginAt")
                 .beanMapped()
-                .assertUpdates(false)    // 만약 Reader가 읽은 후 Writer가 실행되기 직전에 사용자가 로그인하여 상태가 변했을 때
                 .build();
     }
 

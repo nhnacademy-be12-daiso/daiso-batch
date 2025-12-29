@@ -150,17 +150,17 @@ public class GradeChangeBatch {
     @Bean
     @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
     public ItemProcessor<GradeCalculationDto, GradeChangeDto> gradeChangeProcessor() {
-        return calc -> {
-            Long newGradeId = calculateNewGradeId(calc.netAmount());
+        return item -> {
+            Long newGradeId = calculateNewGradeId(item.netAmount());
 
             // 등급 변화가 없으면 skip
-            if (newGradeId.equals(calc.currentGradeId())) {
+            if (newGradeId.equals(item.currentGradeId())) {
                 return null;
             }
 
-            String reason = String.format("최근 3개월 순수 구매액 %d원 기준 등급 조정", calc.netAmount());
+            String reason = String.format("최근 3개월 순수 구매액 %d원 기준 등급 조정", item.netAmount());
 
-            return new GradeChangeDto(calc.userCreatedId(), newGradeId, reason);
+            return new GradeChangeDto(item.userCreatedId(), newGradeId, reason);
         };
     }
 
@@ -185,7 +185,6 @@ public class GradeChangeBatch {
                 .sql("UPDATE Users SET current_grade_id = :gradeId " +
                         "WHERE user_created_id = :userCreatedId AND current_grade_id = :currentGradeId")
                 .beanMapped()
-                .assertUpdates(false)   // 만약 Reader가 읽은 후 Writer가 실행되기 직전에 사용자가 주문하여 순수금액이 변했을 때
                 .build();
     }
 
@@ -201,10 +200,10 @@ public class GradeChangeBatch {
                         "VALUES (:userCreatedId, :gradeId, :reason, :changedAt)")
                 .itemSqlParameterSourceProvider(item -> {
                     Map<String, Object> params = new HashMap<>();
-                    params.put("userCreatedId", item.userCreatedId());
-                    params.put("gradeId", item.gradeId());
-                    params.put("reason", item.reason());
-                    params.put("changedAt", baseDate);
+                    params.put("userCreatedId", item.userCreatedId());  // 회원 ID
+                    params.put("gradeId", item.gradeId());              // 등급 ID
+                    params.put("reason", item.reason());                // 등급 변경 사유
+                    params.put("changedAt", baseDate);                  // 등급 변경 시간
 
                     return new MapSqlParameterSource(params);
                 })
