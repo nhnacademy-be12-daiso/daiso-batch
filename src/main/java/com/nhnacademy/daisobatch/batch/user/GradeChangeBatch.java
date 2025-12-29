@@ -175,7 +175,7 @@ public class GradeChangeBatch {
         return new JdbcBatchItemWriterBuilder<GradeChangeDto>()
                 .dataSource(dataSource)
                 .sql("UPDATE Users SET current_grade_id = :gradeId " +
-                        "WHERE user_created_id = :userCreatedId")
+                        "WHERE user_created_id = :userCreatedId AND current_grade_id = :currentGradeId")
                 .beanMapped()
                 .assertUpdates(false)   // 만약 Reader가 읽은 후 Writer가 실행되기 직전에 사용자가 주문하여 순수금액이 변했을 때
                 .build();

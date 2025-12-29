@@ -10,11 +10,19 @@
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-package com.nhnacademy.daisobatch.dto.user;
+package com.nhnacademy.daisobatch.listener;
 
-import java.time.LocalDateTime;
+import com.nhnacademy.daisobatch.dto.user.GradeCalculationDto;
+import com.nhnacademy.daisobatch.dto.user.GradeChangeDto;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.SkipListener;
 
-public record DormantAccountDto(String loginId,
-                                LocalDateTime lastLoginAt,
-                                Long currentStatusId) {
+@Slf4j
+public class CustomSkipListener implements SkipListener<GradeCalculationDto, GradeChangeDto> {
+
+    @Override
+    public void onSkipInProcess(GradeCalculationDto item, Throwable t) {
+        log.error("등급 산정 중 에러 발생 - user_created_id: {}, Error: {}", item.userCreatedId(), t.getMessage());
+    }
+
 }

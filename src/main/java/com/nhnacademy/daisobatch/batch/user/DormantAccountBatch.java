@@ -27,6 +27,7 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JdbcPagingItemReader;
 import org.springframework.batch.item.database.Order;
@@ -66,11 +67,13 @@ public class DormantAccountBatch {
     @Bean
     @JobScope   // Job이 실행될 때 빈 생성, 끝나면 사라짐
     public Step dormantAccountStep(JdbcPagingItemReader<DormantAccountDto> dormantAccountReader,
+                                   ItemProcessor<DormantAccountDto, DormantAccountDto> dormantAccountProcessor,
                                    CompositeItemWriter<DormantAccountDto> dormantAccountWriter) {
         return new StepBuilder("dormantAccountStep", jobRepository)
                 .<DormantAccountDto, DormantAccountDto>chunk(chunkSize, platformTransactionManager)
-                .reader(dormantAccountReader)   // 휴면 대상 계정 조회
-                .writer(dormantAccountWriter)   // 상태 변경 + 이력 저장
+                .reader(dormantAccountReader)       // 휴면 대상 계정 조회
+                .processor(dormantAccountProcessor) // 휴면 대상 계정 상태 확인
+                .writer(dormantAccountWriter)       // 상태 변경 + 이력 저장
                 .faultTolerant()        // 결함 허용: 일부 데이터 오류 발생 시에도 Step 중단 방지
                 .skip(Exception.class)  // 모든 예외에 대해 스킵 허용
                 .skipLimit(100)         // 최대 100건까지 오류 허용
@@ -96,7 +99,8 @@ public class DormantAccountBatch {
                 .saveState(false)   // 페이징 꼬임 방지: 재시작 시 항상 0페이지부터 읽기
                 .rowMapper((rs, rowNum) -> new DormantAccountDto(   // 결과 > DTO 매핑
                         rs.getString("login_id"),
-                        rs.getTimestamp("last_login_at").toLocalDateTime()
+                        rs.getTimestamp("last_login_at").toLocalDateTime(),
+                        rs.getLong("current_status_id")
                 ))
                 .build();
     }
@@ -109,11 +113,9 @@ public class DormantAccountBatch {
         Map<String, Order> sortKeys = new HashMap<>();
         sortKeys.put("login_id", Order.ASCENDING);  // 페이징 안정성을 위한 정렬 키
 
-        factoryBean.setSelectClause("SELECT login_id, last_login_at");
+        factoryBean.setSelectClause("SELECT login_id, last_login_at, current_status_id");
         factoryBean.setFromClause("FROM Accounts");
-        factoryBean.setWhereClause("WHERE current_status_id = (" +
-                "SELECT status_id FROM Statuses WHERE status_name = 'ACTIVE') " +
-                "AND last_login_at < :lastLoginAtBefore");
+        factoryBean.setWhereClause("WHERE last_login_at < :lastLoginAtBefore");
         factoryBean.setSortKeys(sortKeys);
 
         try {
@@ -122,6 +124,19 @@ public class DormantAccountBatch {
         } catch (Exception e) {
             throw new RuntimeException("[DormantAccountBatch] Query Provider 생성 실패", e);
         }
+    }
+
+    @Bean
+    @StepScope  // Step이 실행될 때 빈 생성, 끝나면 사라짐
+    public ItemProcessor<DormantAccountDto, DormantAccountDto> dormantAccountProcessor() {
+        return item -> {
+            // 현재 상태가 ACTIVE라면 skip
+            if (item.currentStatusId() != 1L) {
+                return null;
+            }
+
+            return item;
+        };
     }
 
     @Bean
