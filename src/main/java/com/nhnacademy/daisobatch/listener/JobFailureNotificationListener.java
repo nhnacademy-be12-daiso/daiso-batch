@@ -15,6 +15,7 @@ package com.nhnacademy.daisobatch.listener;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.JobExecution;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+@RequiredArgsConstructor
 @Slf4j
 @Component
 public class JobFailureNotificationListener implements JobExecutionListener {
@@ -30,13 +32,14 @@ public class JobFailureNotificationListener implements JobExecutionListener {
     @Value("${dooray.hook.url}")
     private String doorayHookUrl;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     @Override
     public void afterJob(JobExecution jobExecution) {
         if (jobExecution.getStatus() == BatchStatus.FAILED) {
             log.error("[JobFailureNotificationListener] 배치 실패: 두레이 알림 전송 시도");
             sendDoorayNotification(jobExecution);
+            
         } else {
             log.debug("[JobFailureNotificationListener] 배치 성공: {}",
                     jobExecution.getJobInstance().getJobName());
@@ -50,7 +53,7 @@ public class JobFailureNotificationListener implements JobExecutionListener {
                 ? String.format("%s ... (생략)", exitDescription.substring(0, 1000)) : exitDescription;
 
         Map<String, Object> doorayBody = new HashMap<>();
-        doorayBody.put("botName", "Dasio Batch Bot");
+        doorayBody.put("botName", "Daiso Batch Bot");
         doorayBody.put("text", "**배치 작업 실패 알림**");
 
         Map<String, String> attachment = new HashMap<>();
