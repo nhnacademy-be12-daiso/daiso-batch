@@ -39,9 +39,9 @@ public class JobFailureNotificationListener implements JobExecutionListener {
         if (jobExecution.getStatus() == BatchStatus.FAILED) {
             log.error("[JobFailureNotificationListener] 배치 실패: 두레이 알림 전송 시도");
             sendDoorayNotification(jobExecution);
-            
+
         } else {
-            log.debug("[JobFailureNotificationListener] 배치 성공: {}",
+            log.info("[JobFailureNotificationListener] 배치 성공: {}",
                     jobExecution.getJobInstance().getJobName());
         }
     }
