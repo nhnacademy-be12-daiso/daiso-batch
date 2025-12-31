@@ -3,7 +3,11 @@ package com.nhnacademy.daisobatch.batch.coupon;
 import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
 import com.nhnacademy.daisobatch.entity.coupon.CouponPolicy;
 import com.nhnacademy.daisobatch.entity.coupon.UserCoupon;
+import com.nhnacademy.daisobatch.listener.JobFailureNotificationListener;
+import com.nhnacademy.daisobatch.listener.coupon.BirthdayChunkListener;
+import com.nhnacademy.daisobatch.listener.coupon.BirthdaySkipListener;
 import com.nhnacademy.daisobatch.repository.coupon.CouponPolicyRepository;
+import com.nhnacademy.daisobatch.repository.coupon.IssuedCouponJdbcRepository;
 import com.nhnacademy.daisobatch.repository.coupon.UserCouponRepository;
 import com.nhnacademy.daisobatch.type.CouponStatus;
 import java.time.LocalDate;
@@ -29,6 +33,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -40,7 +46,8 @@ public class BirthdayCouponBatchDB {
 
     private static final long BIRTHDAY_POLICY_ID = 4L;
 
-    private final UserCouponRepository couponRepository;
+    private final IssuedCouponJdbcRepository issuedCouponJdbcRepository;
+//    private final UserCouponRepository couponRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
@@ -49,11 +56,14 @@ public class BirthdayCouponBatchDB {
     // Processor에서 재사용할 쿠폰 쟁책 캐시
     private CouponPolicy birthdayPolicy;
 
+    private final JobFailureNotificationListener jobFailureNotificationListener;
+
     // 1. Job 정의
     @Bean(name = "birthdayCouponJobDB")
     public Job birthdayCouponJobDB(@Qualifier("birthdayCouponStepDB") Step step) {
         return new JobBuilder("birthdayCouponJobDB", jobRepository)
                 .start(step)
+                .listener(jobFailureNotificationListener)
                 .build();
     }
 
@@ -69,6 +79,16 @@ public class BirthdayCouponBatchDB {
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)
+
+                // 실패 처리 추가
+                .faultTolerant()
+                // 중복 발급(유니크 키) / 무결성 문제는 "데이터 문제"로 보고 스킵
+                .skip(DuplicateKeyException.class)
+                .skip(DataIntegrityViolationException.class)
+                .skipLimit(100)
+
+                .listener(new BirthdayChunkListener()) // 생일 쿠폰 배치에서 chunk 단위로 성공/실패/진행 상황을 알려주는 로그 감시자
+                .listener(new BirthdaySkipListener())
                 .build();
     }
 
@@ -125,13 +145,21 @@ public class BirthdayCouponBatchDB {
                     .orElseThrow(() -> new IllegalStateException("생일 쿠폰 정책이 없습니다. policyId=" + BIRTHDAY_POLICY_ID));
         }
 
+//        final Set<Long> issuedUserIds =
+//                new HashSet<>(couponRepository.findIssuedUserIdsByPolicyId(BIRTHDAY_POLICY_ID));
         final Set<Long> issuedUserIds =
-                new HashSet<>(couponRepository.findIssuedUserIdsByPolicyId(BIRTHDAY_POLICY_ID));
+                issuedCouponJdbcRepository.findIssuedUserIdsByPolicyId(BIRTHDAY_POLICY_ID);
+
 
         return item -> {
             Long userId = item.getUserCreatedId();
-            if (issuedUserIds.contains(userId)) return null;
+            // 1차 방어 processor
+            if (issuedUserIds.contains(userId)) return null; // 이번 배치 실행 안에서 이미 했거나 이미 발급된 대상이면 아예 DB에 보내지 않는다.
+            // null 이면 Writer 호출 x
             issuedUserIds.add(userId);
+
+            // 2차 방어 db 유니크 키
+            // 3차 방어 skip + SkipListener
 
             LocalDate now = LocalDate.now();
             LocalDateTime issuedAt = LocalDateTime.now();

@@ -34,6 +34,29 @@ public class JobFailureNotificationListener implements JobExecutionListener {
 
     private final RestTemplate restTemplate;
 
+
+//    @Override
+//    public void afterJob(JobExecution jobExecution) {
+//
+//        long totalSkipCount = jobExecution.getStepExecutions()
+//                .stream()
+//                .mapToLong(step -> step.getSkipCount())
+//                .sum();
+//
+//        // ① 실패하면 무조건
+//        if (jobExecution.getStatus() == BatchStatus.FAILED) {
+//            sendDoorayNotification(jobExecution);
+//            return;
+//        }
+//
+//        // ② 스킵이 있으면 (테스트용)
+//        if (totalSkipCount >= 1) {
+//            sendDoorayNotification(jobExecution);
+//        }
+//    }
+
+
+
     @Override
     public void afterJob(JobExecution jobExecution) {
         if (jobExecution.getStatus() == BatchStatus.FAILED) {
