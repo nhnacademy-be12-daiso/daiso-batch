@@ -1,8 +1,25 @@
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
 package com.nhnacademy.daisobatch.batch.coupon;
 
 import com.nhnacademy.daisobatch.client.BirthdayCouponBulkEvent;
 import com.nhnacademy.daisobatch.client.UserServiceClient;
 import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
+import com.nhnacademy.daisobatch.listener.JobFailureNotificationListener;
+import com.nhnacademy.daisobatch.listener.coupon.BirthdayChunkListener;
+import com.nhnacademy.daisobatch.listener.coupon.BirthdaySkipListener;
+import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -19,10 +36,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
-
-import java.time.LocalDate;
-import java.util.List;
 
 @Slf4j
 @Configuration
@@ -40,11 +57,16 @@ public class BirthdayCouponBatchMSA {
     @Value("${rabbitmq.birthday.routing-key}")
     private String birthdayRoutingKey;
 
+    private final JobFailureNotificationListener jobFailureNotificationListener;
+    private final BirthdayChunkListener birthdayChunkListener;
+    private final BirthdaySkipListener birthdaySkipListener;
+
     // ===== 1) Job (MSA) =====
     @Bean(name = "birthdayCouponJobMSA")
     public Job birthdayCouponJobMSA(@Qualifier("birthdayCouponStepMSA") Step step) {
         return new JobBuilder("birthdayCouponJobMSA", jobRepository)
                 .start(step)
+                .listener(jobFailureNotificationListener)
                 .build();
     }
 
@@ -60,6 +82,20 @@ public class BirthdayCouponBatchMSA {
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)
+                .faultTolerant()
+
+                // Skip 전략: 중복 데이터나 알 수 없는 데이터 오류는 건너뜀
+                .skip(DuplicateKeyException.class) // 이미 쿠폰이 있어 PK 충돌이 나면 Skip
+                .skip(IllegalArgumentException.class) // 로직상 데이터 문제 시 Skip
+                .skip(DataIntegrityViolationException.class)
+                .skipLimit(100)
+
+                // Retry 전략: DB 연결 문제나 데드락은 재시도
+                .retry(TransientDataAccessException.class) // 일시적 DB 오류
+                .retryLimit(3)
+
+                .listener(birthdayChunkListener) // 생일 쿠폰 배치에서 chunk 단위로 성공/실패/진행 상황을 알려주는 로그 감시자
+                .listener(birthdaySkipListener)
                 .build();
     }
 
@@ -79,7 +115,9 @@ public class BirthdayCouponBatchMSA {
             @Override
             public BirthdayUserDto read() {
                 if (users == null || currentIndex >= users.size()) {
-                    if (lastPage) return null;
+                    if (lastPage) {
+                        return null;
+                    }
 
                     int currentMonth = LocalDate.now().getMonthValue();
                     log.info("User 서버에서 {}월 생일자 조회 - page={}, size={}", currentMonth, page, size);

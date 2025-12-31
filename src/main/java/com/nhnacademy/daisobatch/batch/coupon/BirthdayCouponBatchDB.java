@@ -1,3 +1,15 @@
+/*
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + * While every precaution has been taken in the preparation of this resource,  assumes no
+ * + responsibility for errors or omissions, or for damages resulting from the use of the information
+ * + contained herein
+ * + No part of this resource may be reproduced, stored in a retrieval system, or transmitted, in any
+ * + form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the
+ * + prior written permission.
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
 package com.nhnacademy.daisobatch.batch.coupon;
 
 import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
@@ -8,12 +20,14 @@ import com.nhnacademy.daisobatch.listener.coupon.BirthdayChunkListener;
 import com.nhnacademy.daisobatch.listener.coupon.BirthdaySkipListener;
 import com.nhnacademy.daisobatch.repository.coupon.CouponPolicyRepository;
 import com.nhnacademy.daisobatch.repository.coupon.IssuedCouponJdbcRepository;
-import com.nhnacademy.daisobatch.repository.coupon.UserCouponRepository;
 import com.nhnacademy.daisobatch.type.CouponStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
-
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -35,10 +49,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
-
-import javax.sql.DataSource;
 
 @Configuration
 @RequiredArgsConstructor
@@ -47,7 +60,7 @@ public class BirthdayCouponBatchDB {
     private static final long BIRTHDAY_POLICY_ID = 4L;
 
     private final IssuedCouponJdbcRepository issuedCouponJdbcRepository;
-//    private final UserCouponRepository couponRepository;
+    //    private final UserCouponRepository couponRepository;
     private final CouponPolicyRepository couponPolicyRepository;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
@@ -57,6 +70,8 @@ public class BirthdayCouponBatchDB {
     private CouponPolicy birthdayPolicy;
 
     private final JobFailureNotificationListener jobFailureNotificationListener;
+    private final BirthdayChunkListener birthdayChunkListener;
+    private final BirthdaySkipListener birthdaySkipListener;
 
     // 1. Job 정의
     @Bean(name = "birthdayCouponJobDB")
@@ -79,16 +94,20 @@ public class BirthdayCouponBatchDB {
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)
-
-                // 실패 처리 추가
                 .faultTolerant()
-                // 중복 발급(유니크 키) / 무결성 문제는 "데이터 문제"로 보고 스킵
-                .skip(DuplicateKeyException.class)
+
+                // Skip 전략: 중복 데이터나 알 수 없는 데이터 오류는 건너뜀
+                .skip(DuplicateKeyException.class) // 이미 쿠폰이 있어 PK 충돌이 나면 Skip
+                .skip(IllegalArgumentException.class) // 로직상 데이터 문제 시 Skip
                 .skip(DataIntegrityViolationException.class)
                 .skipLimit(100)
 
-                .listener(new BirthdayChunkListener()) // 생일 쿠폰 배치에서 chunk 단위로 성공/실패/진행 상황을 알려주는 로그 감시자
-                .listener(new BirthdaySkipListener())
+                // Retry 전략: DB 연결 문제나 데드락은 재시도
+                .retry(TransientDataAccessException.class) // 일시적 DB 오류
+                .retryLimit(3)
+
+                .listener(birthdayChunkListener) // 생일 쿠폰 배치에서 chunk 단위로 성공/실패/진행 상황을 알려주는 로그 감시자
+                .listener(birthdaySkipListener)
                 .build();
     }
 
@@ -104,16 +123,16 @@ public class BirthdayCouponBatchDB {
         MySqlPagingQueryProvider queryProvider = new MySqlPagingQueryProvider();
         queryProvider.setSelectClause("SELECT u.user_created_id AS user_created_id");
         queryProvider.setFromClause(
-        """
-            FROM Users u
-            JOIN Accounts a ON a.user_created_id = u.user_created_id
-        """);
+                """
+                            FROM Users u
+                            JOIN Accounts a ON a.user_created_id = u.user_created_id
+                        """);
         queryProvider.setWhereClause(
-        """
-            WHERE u.birth IS NOT NULL
-            AND MONTH(u.birth) = :month
-            AND a.current_status_id = :statusId
-        """);
+                """
+                            WHERE u.birth IS NOT NULL
+                            AND MONTH(u.birth) = :month
+                            AND a.current_status_id = :statusId
+                        """);
 
         Map<String, Order> sortKeys = new LinkedHashMap<>();
         sortKeys.put("u.user_created_id", Order.ASCENDING); // alias 포함(모호성 제거)
@@ -135,7 +154,6 @@ public class BirthdayCouponBatchDB {
     }
 
 
-
     // 4. Processor: DTO -> Entity 변환 (중복 발급 장지 + 정책 캐싱)
     @Bean(name = "birthdayUserProcessorDB")
     @StepScope
@@ -154,7 +172,9 @@ public class BirthdayCouponBatchDB {
         return item -> {
             Long userId = item.getUserCreatedId();
             // 1차 방어 processor
-            if (issuedUserIds.contains(userId)) return null; // 이번 배치 실행 안에서 이미 했거나 이미 발급된 대상이면 아예 DB에 보내지 않는다.
+            if (issuedUserIds.contains(userId)) {
+                return null; // 이번 배치 실행 안에서 이미 했거나 이미 발급된 대상이면 아예 DB에 보내지 않는다.
+            }
             // null 이면 Writer 호출 x
             issuedUserIds.add(userId);
 
@@ -183,11 +203,11 @@ public class BirthdayCouponBatchDB {
         return new JdbcBatchItemWriterBuilder<UserCoupon>()
                 .dataSource(dataSource)
                 .sql("""
-                    INSERT INTO user_coupons
-                      (user_created_id, coupon_policy_id, status, issue_at, expiry_at, used_at)
-                    VALUES
-                      (:userId, :couponPolicyId, :status, :issuedAt, :expiryAt, :usedAt)
-                """)
+                            INSERT INTO user_coupons
+                              (user_created_id, coupon_policy_id, status, issue_at, expiry_at, used_at)
+                            VALUES
+                              (:userId, :couponPolicyId, :status, :issuedAt, :expiryAt, :usedAt)
+                        """)
                 .itemSqlParameterSourceProvider(item -> {
                     MapSqlParameterSource ps = new MapSqlParameterSource();
                     ps.addValue("userId", item.getUserId());

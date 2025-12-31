@@ -56,7 +56,6 @@ public class JobFailureNotificationListener implements JobExecutionListener {
 //    }
 
 
-
     @Override
     public void afterJob(JobExecution jobExecution) {
         if (jobExecution.getStatus() == BatchStatus.FAILED) {
@@ -73,7 +72,7 @@ public class JobFailureNotificationListener implements JobExecutionListener {
         String jobName = jobExecution.getJobInstance().getJobName();
         String exitDescription = jobExecution.getExitStatus().getExitDescription();
         String description = (exitDescription != null && exitDescription.length() > 1000)
-                ? String.format("%s ... (생략)", exitDescription.substring(0, 1000)) : exitDescription;
+                ? String.format("%s\n... (생략)", exitDescription.substring(0, 1000)) : exitDescription;
 
         Map<String, Object> doorayBody = new HashMap<>();
         doorayBody.put("botName", "Daiso Batch Bot");
@@ -81,7 +80,7 @@ public class JobFailureNotificationListener implements JobExecutionListener {
 
         Map<String, String> attachment = new HashMap<>();
         attachment.put("title", String.format("Job Name: %s", jobName));
-        attachment.put("text", String.format("Error Log:\n```\n%s\n```", description));
+        attachment.put("text", String.format("Error Log:\n%s", description));
         attachment.put("color", "#FF0000");
 
         doorayBody.put("attachments", Collections.singletonList(attachment));
