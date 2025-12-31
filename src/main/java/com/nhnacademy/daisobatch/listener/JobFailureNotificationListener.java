@@ -35,39 +35,39 @@ public class JobFailureNotificationListener implements JobExecutionListener {
     private final RestTemplate restTemplate;
 
 
-    @Override
-    public void afterJob(JobExecution jobExecution) {
-
-        long totalSkipCount = jobExecution.getStepExecutions()
-                .stream()
-                .mapToLong(step -> step.getSkipCount())
-                .sum();
-
-        // ① 실패하면 무조건
-        if (jobExecution.getStatus() == BatchStatus.FAILED) {
-            sendDoorayNotification(jobExecution);
-            return;
-        }
-
-        // ② 스킵이 있으면 (테스트용)
-        if (totalSkipCount >= 1) {
-            sendDoorayNotification(jobExecution);
-        }
-    }
-
-
-
 //    @Override
 //    public void afterJob(JobExecution jobExecution) {
-//        if (jobExecution.getStatus() == BatchStatus.FAILED) {
-//            log.error("[JobFailureNotificationListener] 배치 실패: 두레이 알림 전송 시도");
-//            sendDoorayNotification(jobExecution);
 //
-//        } else {
-//            log.debug("[JobFailureNotificationListener] 배치 성공: {}",
-//                    jobExecution.getJobInstance().getJobName());
+//        long totalSkipCount = jobExecution.getStepExecutions()
+//                .stream()
+//                .mapToLong(step -> step.getSkipCount())
+//                .sum();
+//
+//        // ① 실패하면 무조건
+//        if (jobExecution.getStatus() == BatchStatus.FAILED) {
+//            sendDoorayNotification(jobExecution);
+//            return;
+//        }
+//
+//        // ② 스킵이 있으면 (테스트용)
+//        if (totalSkipCount >= 1) {
+//            sendDoorayNotification(jobExecution);
 //        }
 //    }
+
+
+
+    @Override
+    public void afterJob(JobExecution jobExecution) {
+        if (jobExecution.getStatus() == BatchStatus.FAILED) {
+            log.error("[JobFailureNotificationListener] 배치 실패: 두레이 알림 전송 시도");
+            sendDoorayNotification(jobExecution);
+
+        } else {
+            log.debug("[JobFailureNotificationListener] 배치 성공: {}",
+                    jobExecution.getJobInstance().getJobName());
+        }
+    }
 
     private void sendDoorayNotification(JobExecution jobExecution) {
         String jobName = jobExecution.getJobInstance().getJobName();
