@@ -1,6 +1,6 @@
 /*
  * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- * + Copyright 2025. NHN Academy Corp. All rights reserved.
+ * + Copyright 2026. NHN Academy Corp. All rights reserved.
  * + * While every precaution has been taken in the preparation of this resource,  assumes no
  * + responsibility for errors or omissions, or for damages resulting from the use of the information
  * + contained herein
@@ -13,20 +13,19 @@
 package com.nhnacademy.daisobatch.batch.coupon;
 
 import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
-import com.nhnacademy.daisobatch.entity.coupon.CouponPolicy;
-import com.nhnacademy.daisobatch.entity.coupon.UserCoupon;
+import com.nhnacademy.daisobatch.dto.coupon.BirthdayCouponIssueDto;
+import com.nhnacademy.daisobatch.dto.coupon.BirthdayPolicyDto;
 import com.nhnacademy.daisobatch.listener.JobFailureNotificationListener;
 import com.nhnacademy.daisobatch.listener.coupon.BirthdayChunkListener;
 import com.nhnacademy.daisobatch.listener.coupon.BirthdaySkipListener;
-import com.nhnacademy.daisobatch.repository.coupon.CouponPolicyRepository;
-import com.nhnacademy.daisobatch.repository.coupon.IssuedCouponJdbcRepository;
+import com.nhnacademy.daisobatch.type.CouponPolicyStatus;
 import com.nhnacademy.daisobatch.type.CouponStatus;
+import com.nhnacademy.daisobatch.type.CouponType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
@@ -36,7 +35,6 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JdbcPagingItemReader;
 import org.springframework.batch.item.database.Order;
@@ -50,6 +48,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.TransientDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -57,17 +56,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 @RequiredArgsConstructor
 public class BirthdayCouponBatchDB {
 
-    private static final long BIRTHDAY_POLICY_ID = 4L;
+    private final JdbcTemplate jdbcTemplate;
 
-    private final IssuedCouponJdbcRepository issuedCouponJdbcRepository;
-    //    private final UserCouponRepository couponRepository;
-    private final CouponPolicyRepository couponPolicyRepository;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
     private final DataSource dataSource;
-
-    // Processor에서 재사용할 쿠폰 쟁책 캐시
-    private CouponPolicy birthdayPolicy;
 
     private final JobFailureNotificationListener jobFailureNotificationListener;
     private final BirthdayChunkListener birthdayChunkListener;
@@ -86,11 +79,11 @@ public class BirthdayCouponBatchDB {
     @Bean(name = "birthdayCouponStepDB")
     public Step birthdayCouponStepDB(
             @Qualifier("birthdayUserReaderDB") JdbcPagingItemReader<BirthdayUserDto> reader,
-            @Qualifier("birthdayUserProcessorDB") ItemProcessor<BirthdayUserDto, UserCoupon> processor,
-            @Qualifier("birthdayUserJdbcWriterDB") ItemWriter<UserCoupon> writer
+            @Qualifier("birthdayUserProcessorDB") ItemProcessor<BirthdayUserDto, BirthdayCouponIssueDto> processor,
+            @Qualifier("birthdayUserJdbcWriterDB") JdbcBatchItemWriter<BirthdayCouponIssueDto> writer
     ) {
         return new StepBuilder("birthdayCouponStepDB", jobRepository)
-                .<BirthdayUserDto, UserCoupon>chunk(500, transactionManager)
+                .<BirthdayUserDto, BirthdayCouponIssueDto>chunk(1000, transactionManager)
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)
@@ -115,32 +108,31 @@ public class BirthdayCouponBatchDB {
     @Bean(name = "birthdayUserReaderDB")
     @StepScope
     public JdbcPagingItemReader<BirthdayUserDto> birthdayUserReaderDB(
-            @Value("#{jobParameters['currentMonth']}") Integer currentMonth
-    ) {
-        // month는 JobParameter 우선 (재실행/재현성 보장)
+            @Value("#{jobParameters['currentMonth']}") Integer currentMonth) {
         int month = (currentMonth != null) ? currentMonth : LocalDate.now().getMonthValue();
 
+        Long policyId = getBirthdayPolicyIdJdbc();
+
         MySqlPagingQueryProvider queryProvider = new MySqlPagingQueryProvider();
-        queryProvider.setSelectClause("SELECT u.user_created_id AS user_created_id");
-        queryProvider.setFromClause(
-                """
-                            FROM Users u
-                            JOIN Accounts a ON a.user_created_id = u.user_created_id
-                        """);
-        queryProvider.setWhereClause(
-                """
-                            WHERE u.birth IS NOT NULL
-                            AND MONTH(u.birth) = :month
-                            AND a.current_status_id = :statusId
-                        """);
+        queryProvider.setSelectClause("SELECT u.user_created_id AS user_created_id ");
+        queryProvider.setFromClause("FROM Users u " +
+                "JOIN Accounts a ON a.user_created_id = u.user_created_id ");
+        queryProvider.setWhereClause("WHERE u.birth IS NOT NULL " +
+                "AND MONTH(u.birth) = :month " +
+                "AND a.current_status_id = :statusId " +
+                "AND NOT EXISTS (" +
+                "SELECT 1 FROM user_coupons uc " +
+                "WHERE uc.user_created_id = u.user_created_id " +
+                "AND uc.coupon_policy_id = :policyId)");
 
         Map<String, Order> sortKeys = new LinkedHashMap<>();
-        sortKeys.put("u.user_created_id", Order.ASCENDING); // alias 포함(모호성 제거)
+        sortKeys.put("u.user_created_id", Order.ASCENDING);
         queryProvider.setSortKeys(sortKeys);
 
         Map<String, Object> params = new HashMap<>();
         params.put("month", month);
-        params.put("statusId", 1); // ACTIVE = 1 하드코딩
+        params.put("statusId", 1);
+        params.put("policyId", policyId);
 
         return new JdbcPagingItemReaderBuilder<BirthdayUserDto>()
                 .name("birthdayUserReaderDB")
@@ -154,70 +146,87 @@ public class BirthdayCouponBatchDB {
     }
 
 
-    // 4. Processor: DTO -> Entity 변환 (중복 발급 장지 + 정책 캐싱)
+    // 4. Processor: 중복 발급 장지 + 정책 캐싱
     @Bean(name = "birthdayUserProcessorDB")
     @StepScope
-    public ItemProcessor<BirthdayUserDto, UserCoupon> birthdayUserProcessorDB() {
-        if (birthdayPolicy == null) {
-            birthdayPolicy = couponPolicyRepository.findById(BIRTHDAY_POLICY_ID)
-                    .orElseThrow(() -> new IllegalStateException("생일 쿠폰 정책이 없습니다. policyId=" + BIRTHDAY_POLICY_ID));
-        }
+    public ItemProcessor<BirthdayUserDto, BirthdayCouponIssueDto> birthdayUserProcessorDB() {
 
-//        final Set<Long> issuedUserIds =
-//                new HashSet<>(couponRepository.findIssuedUserIdsByPolicyId(BIRTHDAY_POLICY_ID));
-        final Set<Long> issuedUserIds =
-                issuedCouponJdbcRepository.findIssuedUserIdsByPolicyId(BIRTHDAY_POLICY_ID);
-
+        final BirthdayPolicyDto policy = getBirthdayPolicyDtoJdbc();
 
         return item -> {
-            Long userId = item.getUserCreatedId();
-            // 1차 방어 processor
-            if (issuedUserIds.contains(userId)) {
-                return null; // 이번 배치 실행 안에서 이미 했거나 이미 발급된 대상이면 아예 DB에 보내지 않는다.
+            LocalDateTime now = LocalDateTime.now();
+
+            // 만료일: 이번 달 마지막 날 23:59:59
+            LocalDateTime expiryAt;
+
+            if (policy.validDays() != null && policy.validDays() > 0) {
+                expiryAt = now.plusDays(policy.validDays())
+                        .withHour(23).withMinute(59).withSecond(59);
+
+            } else if (policy.validEndDate() != null) {
+                expiryAt = policy.validEndDate();
+
+            } else {
+                expiryAt = now.withDayOfMonth(now.toLocalDate().lengthOfMonth())
+                        .withHour(23).withMinute(59).withSecond(59);
             }
-            // null 이면 Writer 호출 x
-            issuedUserIds.add(userId);
 
-            // 2차 방어 db 유니크 키
-            // 3차 방어 skip + SkipListener
-
-            LocalDate now = LocalDate.now();
-            LocalDateTime issuedAt = LocalDateTime.now();
-            LocalDateTime expiryAt = now.withDayOfMonth(now.lengthOfMonth()).atTime(23, 59, 59);
-
-            return UserCoupon.builder()
-                    .couponPolicy(birthdayPolicy)
-                    .userId(userId)
-                    .status(CouponStatus.ISSUED)
-                    .issuedAt(issuedAt)
-                    .expiryAt(expiryAt)
-                    .usedAt(null)
-                    .build();
+            return new BirthdayCouponIssueDto(
+                    item.getUserCreatedId(),
+                    policy.couponPolicyId(),
+                    CouponStatus.ISSUED.name(),
+                    now,
+                    expiryAt);
         };
     }
 
 
     // 5. Writer: DB에 저장 (null 제거 후 저장)
     @Bean(name = "birthdayUserJdbcWriterDB")
-    public JdbcBatchItemWriter<UserCoupon> birthdayUserJdbcWriterDB() {
-        return new JdbcBatchItemWriterBuilder<UserCoupon>()
+    public JdbcBatchItemWriter<BirthdayCouponIssueDto> birthdayUserJdbcWriterDB() {
+        return new JdbcBatchItemWriterBuilder<BirthdayCouponIssueDto>()
                 .dataSource(dataSource)
-                .sql("""
-                            INSERT INTO user_coupons
-                              (user_created_id, coupon_policy_id, status, issue_at, expiry_at, used_at)
-                            VALUES
-                              (:userId, :couponPolicyId, :status, :issuedAt, :expiryAt, :usedAt)
-                        """)
+                .sql("INSERT INTO user_coupons (user_created_id, coupon_policy_id, status, issue_at, expiry_at, used_at) " +
+                        "VALUES (:userId, :couponPolicyId, :status, :issuedAt, :expiryAt, NULL)")
                 .itemSqlParameterSourceProvider(item -> {
                     MapSqlParameterSource ps = new MapSqlParameterSource();
-                    ps.addValue("userId", item.getUserId());
-                    ps.addValue("couponPolicyId", item.getCouponPolicy().getCouponPolicyId());
-                    ps.addValue("status", item.getStatus().name());
-                    ps.addValue("issuedAt", item.getIssuedAt());
-                    ps.addValue("expiryAt", item.getExpiryAt());
-                    ps.addValue("usedAt", item.getUsedAt());
+                    ps.addValue("userId", item.userCreatedId());
+                    ps.addValue("couponPolicyId", item.couponPolicyId());
+                    ps.addValue("status", item.status());
+                    ps.addValue("issuedAt", item.issuedAt());
+                    ps.addValue("expiryAt", item.expiryAt());
                     return ps;
                 })
                 .build();
     }
+
+    private Long getBirthdayPolicyIdJdbc() {
+        String sql = "SELECT coupon_policy_id FROM coupon_policies WHERE coupon_type = ? AND policy_status = ?";
+
+        try {
+            return jdbcTemplate.queryForObject(sql, Long.class,
+                    CouponType.BIRTHDAY.name(), CouponPolicyStatus.ACTIVE.name());
+
+        } catch (Exception e) {
+            throw new IllegalStateException("활성화된 생일 쿠폰 정책(ID)을 찾을 수 없습니다.");
+        }
+    }
+
+    private BirthdayPolicyDto getBirthdayPolicyDtoJdbc() {
+        String sql = "SELECT coupon_policy_id, valid_days, valid_end_date " +
+                "FROM coupon_policies WHERE coupon_type = ? AND policy_status = ? LIMIT 1";
+
+        try {
+            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new BirthdayPolicyDto(
+                            rs.getLong("coupon_policy_id"),
+                            rs.getObject("valid_days", Integer.class),
+                            rs.getObject("valid_end_date", LocalDateTime.class)),
+                    CouponType.BIRTHDAY.name(),
+                    CouponPolicyStatus.ACTIVE.name());
+
+        } catch (Exception e) {
+            throw new IllegalStateException("활성화된 생일 쿠폰 정책을 찾을 수 없습니다.");
+        }
+    }
+
 }
