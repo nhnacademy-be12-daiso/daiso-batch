@@ -4,8 +4,10 @@ import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
 import com.nhnacademy.daisobatch.entity.coupon.UserCoupon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.SkipListener;
+import org.springframework.stereotype.Component;
 
 @Slf4j
+@Component
 public class BirthdaySkipListener implements SkipListener<BirthdayUserDto, UserCoupon> {
 
     @Override

@@ -3,8 +3,14 @@ package com.nhnacademy.daisobatch.batch.coupon;
 import com.nhnacademy.daisobatch.client.BirthdayCouponBulkEvent;
 import com.nhnacademy.daisobatch.client.UserServiceClient;
 import com.nhnacademy.daisobatch.dto.BirthdayUserDto;
+import com.nhnacademy.daisobatch.exception.RabbitPublishFailedException;
+import com.nhnacademy.daisobatch.exception.UserServicePagingFailedException;
+import com.nhnacademy.daisobatch.listener.JobFailureNotificationListener;
+import feign.FeignException;
+import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -34,6 +40,9 @@ public class BirthdayCouponBatchMSA {
     private final PlatformTransactionManager transactionManager;
     private final RabbitTemplate rabbitTemplate;
 
+    private final JobFailureNotificationListener jobFailureNotificationListener;
+
+
     @Value("${rabbitmq.birthday.exchange}")
     private String birthdayExchange;
 
@@ -45,6 +54,7 @@ public class BirthdayCouponBatchMSA {
     public Job birthdayCouponJobMSA(@Qualifier("birthdayCouponStepMSA") Step step) {
         return new JobBuilder("birthdayCouponJobMSA", jobRepository)
                 .start(step)
+                .listener(jobFailureNotificationListener)
                 .build();
     }
 
@@ -56,7 +66,7 @@ public class BirthdayCouponBatchMSA {
             @Qualifier("birthdayUserWriterMSA") ItemWriter<Long> writer
     ) {
         return new StepBuilder("birthdayCouponStepMSA", jobRepository)
-                .<BirthdayUserDto, Long>chunk(500, transactionManager)
+                .<BirthdayUserDto, Long>chunk(1000, transactionManager)
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)
@@ -84,7 +94,9 @@ public class BirthdayCouponBatchMSA {
                     int currentMonth = LocalDate.now().getMonthValue();
                     log.info("User 서버에서 {}월 생일자 조회 - page={}, size={}", currentMonth, page, size);
 
-                    users = userServiceClient.getBirthdayUsers(currentMonth, page, size);
+//                    users = userServiceClient.getBirthdayUsers(currentMonth, page, size);
+                    users = fetchBirthdayUsersWithRetry(currentMonth, page, size);
+
                     currentIndex = 0;
 
                     if (users == null || users.isEmpty()) {
@@ -104,6 +116,41 @@ public class BirthdayCouponBatchMSA {
 
                 return users.get(currentIndex++);
             }
+
+            private List<BirthdayUserDto> fetchBirthdayUsersWithRetry(int month, int page, int size) {
+                for (int attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        return userServiceClient.getBirthdayUsers(month, page, size);
+                    } catch (RetryableException e) {
+                        // 네트워크/타임아웃/UnknownHost 등 "연결계열"
+                        if (attempt == 3) {
+                            throw new UserServicePagingFailedException(
+                                    "User 서버 생일자 페이징 조회 실패 (Retryable) " +
+                                            "(month=" + month + ", page=" + page + ")", e
+                            );
+                        }
+                        sleep();
+
+                    } catch (FeignException e) {
+                        if (e.status() >= 400 && e.status() < 500) {
+                            throw e; // 4xx 즉시 실패
+                        }
+                        if (attempt == 3) throw e;
+                        sleep();
+                    }
+                }
+                throw new UserServicePagingFailedException(
+                        "User 서버 생일자 페이징 조회 실패 " +
+                                "(month=" + month + ", page=" + page + ")"
+                );
+            }
+
+            private void sleep() {
+                try {
+                    Thread.sleep(300);
+                } catch (InterruptedException ignored) {}
+            }
+
         };
     }
 
@@ -115,6 +162,18 @@ public class BirthdayCouponBatchMSA {
     }
 
     // ===== 5) Writer (MSA): RabbitMQ publish =====
+//    @Bean(name = "birthdayUserWriterMSA")
+//    public ItemWriter<Long> birthdayUserWriterMSA() {
+//        return chunk -> {
+//            List<? extends Long> userIds = chunk.getItems();
+//
+//            BirthdayCouponBulkEvent event =
+//                    new BirthdayCouponBulkEvent(List.copyOf(userIds), "birthday-" + LocalDate.now());
+//
+//            rabbitTemplate.convertAndSend(birthdayExchange, birthdayRoutingKey, event);
+//            log.info("Bulk publish size={}, batchId={}", userIds.size(), event.batchId());
+//        };
+//    }
     @Bean(name = "birthdayUserWriterMSA")
     public ItemWriter<Long> birthdayUserWriterMSA() {
         return chunk -> {
@@ -123,8 +182,27 @@ public class BirthdayCouponBatchMSA {
             BirthdayCouponBulkEvent event =
                     new BirthdayCouponBulkEvent(List.copyOf(userIds), "birthday-" + LocalDate.now());
 
-            rabbitTemplate.convertAndSend(birthdayExchange, birthdayRoutingKey, event);
-            log.info("Bulk publish size={}, batchId={}", userIds.size(), event.batchId());
+            CorrelationData cd = new CorrelationData(event.batchId());
+
+            rabbitTemplate.convertAndSend(birthdayExchange, birthdayRoutingKey, event, message -> {
+                message.getMessageProperties().setCorrelationId(event.batchId());
+                return message;
+            }, cd);
+
+            // broker confirm 기다림
+            CorrelationData.Confirm confirm = cd.getFuture().get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+            if (!confirm.isAck()) {
+                throw new RabbitPublishFailedException(
+                        "Rabbit publish NACK. batchId=" + event.batchId() + ", cause=" + confirm.getReason()
+                );
+            }
+            // (선택) returns는 아래 “ReturnsTracker” 방식으로 잡는 게 깔끔
+            // log.info("Bulk publish confirmed size={}, batchId={}", userIds.size(), event.batchId());
         };
     }
+
+
+
+
 }

@@ -24,4 +24,6 @@ public class IssuedCouponJdbcRepository {
                 jdbcTemplate.queryForList(sql, Long.class, policyId)
         );
     }
+
+
 }
