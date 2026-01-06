@@ -194,7 +194,7 @@ public class BirthdayCouponBatchMSA {
 
             if (!confirm.isAck()) {
                 throw new RabbitPublishFailedException(
-                        "Rabbit publish NACK. batchId=" + event.batchId() + ", cause=" + confirm.getReason()
+                        "Rabbit publish NACK.(메시지 큐 접근 실패) batchId=" + event.batchId() + ", cause=" + confirm.getReason()
                 );
             }
             // (선택) returns는 아래 “ReturnsTracker” 방식으로 잡는 게 깔끔
