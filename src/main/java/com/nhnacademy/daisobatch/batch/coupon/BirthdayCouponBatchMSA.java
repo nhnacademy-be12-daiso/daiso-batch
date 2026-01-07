@@ -79,80 +79,74 @@ public class BirthdayCouponBatchMSA {
     public ItemReader<BirthdayUserDto> birthdayUserReaderMSA() {
         return new ItemReader<>() {
             private List<BirthdayUserDto> users = null;
-            private int currentIndex = 0;
+            private int index = 0;
 
-            private int page = 0;
+            private long lastSeenId = 0L; // 커서
             private final int size = 1000;
-
-            private boolean lastPage = false;
+            private boolean finished = false;
 
             @Override
             public BirthdayUserDto read() {
-                if (users == null || currentIndex >= users.size()) {
-                    if (lastPage) return null;
+                if (finished) return null; // 이미 끝났으면 null
 
-                    int currentMonth = LocalDate.now().getMonthValue();
-                    log.info("User 서버에서 {}월 생일자 조회 - page={}, size={}", currentMonth, page, size);
-
-//                    users = userServiceClient.getBirthdayUsers(currentMonth, page, size);
-                    users = fetchBirthdayUsersWithRetry(currentMonth, page, size);
-
-                    currentIndex = 0;
-
+                if (users == null || index >= users.size()) {
+                    int month = LocalDate.now().getMonthValue();
+                    log.info("User 서버에서 {}월 생일자 조회(커서) - lastSeenId={}, size={}",
+                            month, lastSeenId, size);
+                    users = fetchWithRetry(month, lastSeenId, size);
+                    index = 0;
+                    // 더 이상 없으면 종료
                     if (users == null || users.isEmpty()) {
-                        log.info("{}월 생일자 더 없음(빈 페이지) - 종료", currentMonth);
-                        lastPage = true;
+                        log.info("{}월 생일자 더 없음(빈 결과) - 종료 (lastSeenId={})", month, lastSeenId);
+                        finished = true;
                         return null;
                     }
 
-                    log.info("{}월 생일자 page={} 조회 {}명", currentMonth, page, users.size());
-
-                    if (users.size() < size) {
-                        lastPage = true;
-                    } else {
-                        page++;
-                    }
+                    // 다음 요청을 위한 커서 갱신
+                    long prevCursor = lastSeenId;
+                    lastSeenId = users.get(users.size() - 1).getUserCreatedId();
+                    log.info("{}월 생일자 조회 {}명 (cursor {} -> {})", month, users.size(), prevCursor, lastSeenId);
                 }
 
-                return users.get(currentIndex++);
+                return users.get(index++);
             }
 
-            private List<BirthdayUserDto> fetchBirthdayUsersWithRetry(int month, int page, int size) {
+            private List<BirthdayUserDto> fetchWithRetry(int month, long lastSeenId, int size) {
                 for (int attempt = 1; attempt <= 3; attempt++) {
                     try {
-                        return userServiceClient.getBirthdayUsers(month, page, size);
+                        return userServiceClient.getBirthdayUsers(month, lastSeenId, size);
                     } catch (RetryableException e) {
-                        // 네트워크/타임아웃/UnknownHost 등 "연결계열"
-                        if (attempt == 3) {
+                        if (attempt == 3){
                             throw new UserServicePagingFailedException(
-                                    "User 서버 생일자 페이징 조회 실패 (Retryable) " +
-                                            "(month=" + month + ", page=" + page + ")", e
-                            );
+                                    "User 서버 생일자 커서 조회 실패 (Retryable) " +
+                                    "(month=" + month + ", lastSeenId=" + lastSeenId + ", size=" + size + ")", e);
                         }
+                        log.warn("User 서버 커서 조회 재시도(Retryable) - attempt={}/3, month={}, lastSeenId={}",
+                                attempt, month, lastSeenId);
                         sleep();
-
                     } catch (FeignException e) {
                         if (e.status() >= 400 && e.status() < 500) {
-                            throw e; // 4xx 즉시 실패
+                            throw new UserServicePagingFailedException(
+                                    "User 서버 생일자 커서 조회 실패 (4xx) (month=" + month +
+                                            ", lastSeenId=" + lastSeenId + ", status=" + e.status() + ")", e);
                         }
-                        if (attempt == 3) throw e;
+                        if (attempt == 3) {
+                            throw new UserServicePagingFailedException(
+                                    "User 서버 생일자 커서 조회 실패 (5xx) (month=" + month +
+                                            ", lastSeenId=" + lastSeenId + ", status=" + e.status() + ")", e);
+                        }
                         sleep();
                     }
                 }
-                throw new UserServicePagingFailedException(
-                        "User 서버 생일자 페이징 조회 실패 " +
-                                "(month=" + month + ", page=" + page + ")"
-                );
+                throw new IllegalStateException("User 서버 조회 실패");
             }
 
             private void sleep() {
-                try {
-                    Thread.sleep(300);
-                } catch (InterruptedException ignored) {}
+                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
             }
-
         };
     }
+
 
     // ===== 4) Processor (MSA): DTO -> userId =====
     @Bean(name = "birthdayUserProcessorMSA")
@@ -162,18 +156,6 @@ public class BirthdayCouponBatchMSA {
     }
 
     // ===== 5) Writer (MSA): RabbitMQ publish =====
-//    @Bean(name = "birthdayUserWriterMSA")
-//    public ItemWriter<Long> birthdayUserWriterMSA() {
-//        return chunk -> {
-//            List<? extends Long> userIds = chunk.getItems();
-//
-//            BirthdayCouponBulkEvent event =
-//                    new BirthdayCouponBulkEvent(List.copyOf(userIds), "birthday-" + LocalDate.now());
-//
-//            rabbitTemplate.convertAndSend(birthdayExchange, birthdayRoutingKey, event);
-//            log.info("Bulk publish size={}, batchId={}", userIds.size(), event.batchId());
-//        };
-//    }
     @Bean(name = "birthdayUserWriterMSA")
     public ItemWriter<Long> birthdayUserWriterMSA() {
         return chunk -> {
