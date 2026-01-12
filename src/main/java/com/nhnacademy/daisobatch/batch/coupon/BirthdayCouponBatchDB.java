@@ -108,22 +108,31 @@ public class BirthdayCouponBatchDB {
                 : LocalDate.now().getMonthValue();
 
         MySqlPagingQueryProvider queryProvider = new MySqlPagingQueryProvider();
-        queryProvider.setSelectClause("SELECT u.user_created_id AS user_created_id");
+        queryProvider.setSelectClause("SELECT DISTINCT u.user_created_id AS user_created_id");
+
         queryProvider.setFromClause("""
             FROM Users u
             INNER JOIN Accounts a
                 ON a.user_created_id = u.user_created_id
-            LEFT JOIN user_coupons uc
-                ON uc.user_created_id = u.user_created_id
-               AND uc.coupon_policy_id = :policyId
         """);
-
         queryProvider.setWhereClause("""
             WHERE u.birth IS NOT NULL
               AND MONTH(u.birth) = :month
               AND a.current_status_id = :statusId
-              AND uc.user_coupon_id IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_coupons uc
+                  WHERE uc.user_created_id = u.user_created_id
+                    AND uc.coupon_policy_id = :policyId
+              )
         """);
+
+//        queryProvider.setWhereClause("""
+//            WHERE u.birth IS NOT NULL
+//              AND MONTH(u.birth) = :month
+//              AND a.current_status_id = :statusId
+//              AND uc.user_coupon_id IS NULL
+//        """);
 
         Map<String, Order> sortKeys = new LinkedHashMap<>();
         sortKeys.put("u.user_created_id", Order.ASCENDING);
@@ -155,19 +164,8 @@ public class BirthdayCouponBatchDB {
             birthdayPolicy = couponPolicyJdbcRepository.findById(BIRTHDAY_POLICY_ID);
         }
 
-        final Set<Long> issuedUserIds =
-                issuedCouponJdbcRepository.findIssuedUserIdsByPolicyId(BIRTHDAY_POLICY_ID);
-
-
         return item -> {
             Long userId = item.getUserCreatedId();
-            // 1차 방어 processor
-            if (issuedUserIds.contains(userId)) return null; // 이번 배치 실행 안에서 이미 했거나 이미 발급된 대상이면 아예 DB에 보내지 않는다.
-            // null 이면 Writer 호출 x
-            issuedUserIds.add(userId);
-
-            // 2차 방어 db 유니크 키
-            // 3차 방어 skip + SkipListener
 
             LocalDate now = LocalDate.now();
             LocalDateTime issuedAt = LocalDateTime.now();
@@ -183,7 +181,6 @@ public class BirthdayCouponBatchDB {
                     .build();
         };
     }
-
 
     // 5. Writer: DB에 저장 (null 제거 후 저장)
     @Bean(name = "birthdayUserJdbcWriterDB")
